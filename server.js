@@ -15,9 +15,12 @@ const start = async () => {
   const server = http.createServer(app);
   const io = new Server(server, {
     cors: {
-      origin: '*', // tighten in production
+      origin: '*',
       methods: ['GET', 'POST'],
     },
+    pingInterval: 10000,
+    pingTimeout: 5000,
+    transports: ['websocket', 'polling'],
   });
 
   // Initialize Socket.io event handlers

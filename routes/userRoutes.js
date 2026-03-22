@@ -1,14 +1,13 @@
 const { Router } = require('express');
-const { getMe, updatePreferences } = require('../controllers/userController');
+const { getMe, updatePreferences, getUser } = require('../controllers/userController');
 const { protect } = require('../middleware/auth');
 const validate = require('../middleware/validate');
 const { preferencesSchema } = require('../utils/validators');
 
 const router = Router();
 
-router.use(protect); // all user routes require auth
-
-router.get('/me', getMe);
-router.put('/preferences', validate(preferencesSchema), updatePreferences);
+router.get('/me', protect, getMe);
+router.put('/preferences', protect, validate(preferencesSchema), updatePreferences);
+router.get('/:id', protect, getUser);
 
 module.exports = router;

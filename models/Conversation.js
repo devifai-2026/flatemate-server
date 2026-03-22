@@ -9,6 +9,16 @@ const conversationSchema = new mongoose.Schema(
         required: true,
       },
     ],
+    // Group chat fields
+    isGroup: { type: Boolean, default: false },
+    groupName: { type: String, trim: true, maxlength: 100 },
+    team: { type: mongoose.Schema.Types.ObjectId, ref: 'Team' },
+    // Track when each member joined — new members can't see older messages
+    memberJoinedAt: {
+      type: Map,
+      of: Date,
+      default: {},
+    },
     // Optional — set when conversation was created via paid enquiry
     enquiry: {
       type: mongoose.Schema.Types.ObjectId,

@@ -1,29 +1,27 @@
 const { Router } = require('express');
 const {
-  createTeam,
-  getTeams,
-  getTeam,
-  joinTeam,
-  leaveTeam,
-  deleteTeam,
+  createTeam, joinTeam, getMyTeams, getTeam,
+  addToWishlist, removeFromWishlist, getWishlist,
+  leaveTeam, deleteTeam,
 } = require('../controllers/teamController');
 const { protect } = require('../middleware/auth');
-const validate = require('../middleware/validate');
-const { teamSchema } = require('../utils/validators');
 
 const router = Router();
 
-router
-  .route('/')
-  .get(getTeams)
-  .post(protect, validate(teamSchema), createTeam);
+// All team routes require auth
+router.use(protect);
 
-router
-  .route('/:id')
-  .get(getTeam)
-  .delete(protect, deleteTeam);
+router.post('/', createTeam);           // Create team → returns passkey
+router.post('/join', joinTeam);          // Join via passkey { passkey: "FM-A7X2K9" }
+router.get('/', getMyTeams);             // Get my teams only
 
-router.post('/:id/join', protect, joinTeam);
-router.post('/:id/leave', protect, leaveTeam);
+router.get('/:id', getTeam);
+router.delete('/:id', deleteTeam);
+router.post('/:id/leave', leaveTeam);
+
+// Shared wishlist
+router.get('/:id/wishlist', getWishlist);
+router.post('/:id/wishlist', addToWishlist);
+router.delete('/:id/wishlist', removeFromWishlist);
 
 module.exports = router;

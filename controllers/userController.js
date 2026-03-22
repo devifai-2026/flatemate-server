@@ -13,4 +13,10 @@ const updatePreferences = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, data: user });
 });
 
-module.exports = { getMe, updatePreferences };
+/** GET /api/users/:id — public profile */
+const getUser = asyncHandler(async (req, res) => {
+  const user = await userService.getProfile(req.params.id);
+  res.status(200).json({ success: true, data: user });
+});
+
+module.exports = { getMe, updatePreferences, getUser };

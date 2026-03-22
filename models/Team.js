@@ -1,9 +1,6 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
-/**
- * A Team allows users to group up and look for a room together.
- * E.g. 3 friends looking for a 3BHK.
- */
 const teamSchema = new mongoose.Schema(
   {
     name: {
@@ -11,6 +8,12 @@ const teamSchema = new mongoose.Schema(
       required: [true, 'Team name is required'],
       trim: true,
       maxlength: 100,
+    },
+    // Unique passkey for joining (e.g. FM-A7X2K9)
+    passkey: {
+      type: String,
+      unique: true,
+      required: true,
     },
     description: {
       type: String,
@@ -30,6 +33,10 @@ const teamSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    conversation: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Conversation',
+    },
     members: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -38,18 +45,29 @@ const teamSchema = new mongoose.Schema(
     ],
     maxMembers: {
       type: Number,
-      default: 4,
+      default: 5,
       min: 2,
       max: 10,
     },
-    isOpen: {
-      type: Boolean,
-      default: true, // accepting new members
-    },
+    // Shared wishlist — items saved by any team member
+    sharedWishlist: [
+      {
+        itemType: { type: String, enum: ['room', 'pg', 'requirement'] },
+        itemId: { type: mongoose.Schema.Types.ObjectId },
+        addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        addedAt: { type: Date, default: Date.now },
+      },
+    ],
   },
   { timestamps: true }
 );
 
-teamSchema.index({ location: 1, isOpen: 1 });
+// Generate passkey before saving (if not set)
+teamSchema.pre('validate', function () {
+  if (!this.passkey) {
+    const rand = crypto.randomBytes(3).toString('hex').toUpperCase();
+    this.passkey = `FM-${rand}`;
+  }
+});
 
 module.exports = mongoose.model('Team', teamSchema);

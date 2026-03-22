@@ -34,12 +34,12 @@ const resetPasswordSchema = Joi.object({
 
 const sendOtpSchema = Joi.object({
   phone: Joi.string()
-    .pattern(phonePattern)
     .required()
-    .messages({ 'string.pattern.base': 'Please provide a valid phone number' }),
+    .messages({ 'any.required': 'Phone number is required' }),
 });
 
 const verifyOtpSchema = Joi.object({
+  phone: Joi.string().required(),
   otp: Joi.string().length(6).required()
     .messages({ 'string.length': 'OTP must be 6 digits' }),
 });

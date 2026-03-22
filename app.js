@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./docs/swagger');
 const errorHandler = require('./middleware/errorHandler');
@@ -18,6 +17,11 @@ const enquiryRoutes = require('./routes/enquiryRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const teamRoutes = require('./routes/teamRoutes');
+const onboardingRoutes = require('./routes/onboardingRoutes');
+const pgRoutes = require('./routes/pgRoutes');
+const wishlistRoutes = require('./routes/wishlistRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const walletRoutes = require('./routes/walletRoutes');
 
 const app = express();
 
@@ -30,13 +34,6 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
-// Rate limiting — 100 requests per 15 min per IP
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { success: false, message: 'Too many requests, please try again later' },
-});
-app.use('/api', limiter);
 
 // ── Swagger Docs ──
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
@@ -52,6 +49,11 @@ app.use('/api/enquiry', enquiryRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/teams', teamRoutes);
+app.use('/api/onboarding', onboardingRoutes);
+app.use('/api/pgs', pgRoutes);
+app.use('/api/wishlist', wishlistRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/wallet', walletRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

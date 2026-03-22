@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "/Users/subhojitdutta/Desktop/d/flatmate-web/src/components/layout",
+      "/Users/subhojitdutta/Desktop/d/flatmate-web/src/components/cards",
+      "/Users/subhojitdutta/Desktop/d/flatmate-web/src/layouts",
+      "/Users/subhojitdutta/Desktop/d/flatmate-web/src/pages"
+    ]
+  }
+}
