@@ -309,6 +309,109 @@ router.put('/users/:id/unblock', asyncHandler(async (req, res) => {
 }));
 
 // ═══════════════════════════════════════════
+// TRANSACTIONS
+// ═══════════════════════════════════════════
+
+router.get('/transactions', asyncHandler(async (req, res) => {
+  const { page = 1, limit = 20, type, paymentStatus, from, to, search } = req.query;
+  const filter = {};
+
+  if (type) filter.type = type;
+  if (paymentStatus) filter.paymentStatus = paymentStatus;
+
+  // Date range filter
+  if (from || to) {
+    filter.createdAt = {};
+    if (from) filter.createdAt.$gte = new Date(from);
+    if (to) {
+      const toDate = new Date(to);
+      toDate.setHours(23, 59, 59, 999);
+      filter.createdAt.$lte = toDate;
+    }
+  }
+
+  // Search by user name/phone/email — need to find matching user IDs first
+  let userIds;
+  if (search) {
+    const matchingUsers = await User.find({
+      $or: [
+        { name: new RegExp(search, 'i') },
+        { phone: new RegExp(search, 'i') },
+        { email: new RegExp(search, 'i') },
+      ],
+    }).select('_id').lean();
+    userIds = matchingUsers.map(u => u._id);
+    filter.user = { $in: userIds };
+  }
+
+  const skip = (Number(page) - 1) * Number(limit);
+  const [transactions, total] = await Promise.all([
+    WalletTransaction.find(filter)
+      .populate('user', 'name phone email profileImage city')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(Number(limit))
+      .lean(),
+    WalletTransaction.countDocuments(filter),
+  ]);
+
+  res.json({
+    success: true,
+    data: transactions,
+    pagination: { total, page: Number(page), pages: Math.ceil(total / Number(limit)) },
+  });
+}));
+
+router.get('/transactions/stats', asyncHandler(async (req, res) => {
+  const { from, to } = req.query;
+  const dateFilter = {};
+  if (from || to) {
+    dateFilter.createdAt = {};
+    if (from) dateFilter.createdAt.$gte = new Date(from);
+    if (to) {
+      const toDate = new Date(to);
+      toDate.setHours(23, 59, 59, 999);
+      dateFilter.createdAt.$lte = toDate;
+    }
+  }
+
+  const [
+    totalRecharges, totalDebits,
+    rechargeSum, debitSum,
+    paidCount, failedCount, pendingCount,
+  ] = await Promise.all([
+    WalletTransaction.countDocuments({ type: 'recharge', ...dateFilter }),
+    WalletTransaction.countDocuments({ type: 'debit', ...dateFilter }),
+    WalletTransaction.aggregate([
+      { $match: { type: 'recharge', paymentStatus: 'paid', ...dateFilter } },
+      { $group: { _id: null, total: { $sum: '$amount' }, tokens: { $sum: '$tokens' } } },
+    ]),
+    WalletTransaction.aggregate([
+      { $match: { type: 'debit', ...dateFilter } },
+      { $group: { _id: null, total: { $sum: '$amount' }, tokens: { $sum: '$tokens' } } },
+    ]),
+    WalletTransaction.countDocuments({ paymentStatus: 'paid', ...dateFilter }),
+    WalletTransaction.countDocuments({ paymentStatus: 'failed', ...dateFilter }),
+    WalletTransaction.countDocuments({ paymentStatus: 'pending', ...dateFilter }),
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      totalRecharges,
+      totalDebits,
+      rechargeAmount: rechargeSum[0]?.total || 0,
+      rechargeTokens: rechargeSum[0]?.tokens || 0,
+      debitAmount: debitSum[0]?.total || 0,
+      debitTokens: debitSum[0]?.tokens || 0,
+      paidCount,
+      failedCount,
+      pendingCount,
+    },
+  });
+}));
+
+// ═══════════════════════════════════════════
 // LISTINGS MODERATION
 // ═══════════════════════════════════════════
 
