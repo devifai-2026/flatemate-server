@@ -43,7 +43,7 @@ const createRechargeOrder = async (userId) => {
     order = await getRazorpay().orders.create({
       amount: RECHARGE_AMOUNT_PAISE,
       currency: 'INR',
-      receipt: `wallet_${userId}_${Date.now()}`,
+      receipt: `w_${Date.now()}`,
       notes: { userId, type: 'wallet_recharge' },
     });
     console.log('[WALLET] Razorpay order created:', order.id);
