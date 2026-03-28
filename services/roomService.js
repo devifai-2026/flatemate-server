@@ -13,14 +13,9 @@ const create = async (data, userId) => {
  */
 const getAll = async (query) => {
   const {
-    location,
-    minRent,
-    maxRent,
-    amenities,
-    preferredTenant,
-    sort,
-    page = 1,
-    limit = 10,
+    location, minRent, maxRent, amenities, preferredTenant,
+    roomType, furnishing, parking, sort,
+    page = 1, limit = 10,
   } = query;
 
   const filter = {};
@@ -36,6 +31,9 @@ const getAll = async (query) => {
     filter.amenities = { $all: list };
   }
   if (preferredTenant) filter.preferredTenant = preferredTenant;
+  if (roomType) filter.roomType = roomType;
+  if (furnishing) filter.furnishing = furnishing;
+  if (parking) filter.parking = parking;
 
   const skip = (Number(page) - 1) * Number(limit);
 

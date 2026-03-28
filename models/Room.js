@@ -52,6 +52,23 @@ const roomSchema = new mongoose.Schema(
       default: 'any',
     },
 
+    // ── Room details ──
+    roomType: {
+      type: String,
+      enum: ['1rk', '1bhk', '2bhk', '3bhk', '4bhk+', 'single-room', 'shared-room'],
+    },
+    furnishing: {
+      type: String,
+      enum: ['fully-furnished', 'semi-furnished', 'unfurnished'],
+    },
+    bathrooms: { type: Number, min: 1 },
+    floor: { type: String, trim: true },
+    totalArea: { type: String, trim: true },
+    parking: {
+      type: String,
+      enum: ['bike', 'car', 'both', 'none'],
+    },
+
     // ── Phone visibility ──
     phoneVisibility: {
       type: String,
