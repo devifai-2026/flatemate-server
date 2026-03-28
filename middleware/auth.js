@@ -8,7 +8,10 @@ const AppError = require('../utils/AppError');
 const protect = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
+  console.log(`[AUTH] ${req.method} ${req.originalUrl} — authHeader: ${authHeader ? 'present' : 'MISSING'}`);
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log(`[AUTH] REJECTED — no Bearer token. Headers:`, JSON.stringify(req.headers));
     return next(new AppError('Not authorized — no token provided', 401));
   }
 
@@ -16,9 +19,10 @@ const protect = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // { id, email, iat, exp }
+    req.user = decoded;
     next();
-  } catch {
+  } catch (err) {
+    console.log(`[AUTH] REJECTED — invalid token:`, err.message);
     return next(new AppError('Not authorized — invalid token', 401));
   }
 };

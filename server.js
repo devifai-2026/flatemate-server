@@ -1,5 +1,18 @@
+const path = require('path');
 const env = process.env.NODE_ENV || 'development';
-require('dotenv').config({ path: `.env.${env}` });
+const envPath = path.join(__dirname, `.env.${env}`);
+const dotenvResult = require('dotenv').config({ path: envPath });
+if (dotenvResult.error) {
+  console.error(`[DOTENV] Failed to load ${envPath}:`, dotenvResult.error.message);
+  // Fallback — try .env
+  require('dotenv').config();
+} else {
+  console.log(`[DOTENV] Loaded ${envPath} (${Object.keys(dotenvResult.parsed || {}).length} vars)`);
+}
+console.log(`[ENV] JWT_SECRET: ${process.env.JWT_SECRET ? 'SET (' + process.env.JWT_SECRET.slice(0, 8) + '...)' : 'MISSING!'}`);
+console.log(`[ENV] RAZORPAY_KEY_ID: ${process.env.RAZORPAY_KEY_ID ? 'SET' : 'MISSING!'}`);
+console.log(`[ENV] MONGO_URI: ${process.env.MONGO_URI ? 'SET' : 'MISSING!'}`);
+
 
 const http = require('http');
 const { Server } = require('socket.io');

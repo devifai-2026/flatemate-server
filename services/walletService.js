@@ -38,12 +38,20 @@ const getBalance = async (userId) => {
  * ₹19 = 20 tokens.
  */
 const createRechargeOrder = async (userId) => {
-  const order = await getRazorpay().orders.create({
-    amount: RECHARGE_AMOUNT_PAISE,
-    currency: 'INR',
-    receipt: `wallet_${userId}_${Date.now()}`,
-    notes: { userId, type: 'wallet_recharge' },
-  });
+  console.log('[WALLET] Creating Razorpay order. KEY_ID:', process.env.RAZORPAY_KEY_ID ? 'SET' : 'MISSING');
+  let order;
+  try {
+    order = await getRazorpay().orders.create({
+      amount: RECHARGE_AMOUNT_PAISE,
+      currency: 'INR',
+      receipt: `wallet_${userId}_${Date.now()}`,
+      notes: { userId, type: 'wallet_recharge' },
+    });
+    console.log('[WALLET] Razorpay order created:', order.id);
+  } catch (err) {
+    console.error('[WALLET] Razorpay order FAILED:', err.message, err.statusCode, JSON.stringify(err.error || {}));
+    throw new AppError(err.error?.description || 'Payment gateway error. Please try again.', 502);
+  }
 
   // Create pending transaction
   await WalletTransaction.create({
