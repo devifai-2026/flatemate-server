@@ -9,15 +9,13 @@ const Requirement = require('../models/Requirement');
 const Conversation = require('../models/Conversation');
 const AppError = require('../utils/AppError');
 
-let _razorpay;
 function getRazorpay() {
-  if (!_razorpay) {
-    _razorpay = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET,
-    });
-  }
-  return _razorpay;
+  // Create fresh instance each time to avoid stale credentials
+  console.log('[WALLET] Razorpay init — key_id:', process.env.RAZORPAY_KEY_ID, 'key_secret:', process.env.RAZORPAY_KEY_SECRET ? process.env.RAZORPAY_KEY_SECRET.slice(0, 6) + '...' : 'MISSING');
+  return new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
 }
 
 const RECHARGE_AMOUNT_PAISE = 1900; // ₹19
