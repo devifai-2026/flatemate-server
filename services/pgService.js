@@ -14,6 +14,8 @@ const getAll = async (query) => {
     gender,
     sharing,
     meals,
+    mealType,
+    sort,
     page = 1,
     limit = 10,
   } = query;
@@ -24,6 +26,7 @@ const getAll = async (query) => {
   if (gender) filter.gender = gender;
   if (sharing) filter.sharing = sharing;
   if (meals !== undefined) filter.meals = meals === 'true';
+  if (mealType) filter.mealType = mealType;
   if (minRent || maxRent) {
     filter.rent = {};
     if (minRent) filter.rent.$gte = Number(minRent);
@@ -32,10 +35,14 @@ const getAll = async (query) => {
 
   const skip = (Number(page) - 1) * Number(limit);
 
+  let sortObj = { createdAt: -1 };
+  if (sort === 'rent') sortObj = { rent: 1 };
+  else if (sort === '-rent') sortObj = { rent: -1 };
+
   const [pgs, total] = await Promise.all([
     PG.find(filter)
       .populate('postedBy', 'name email verified profileImage')
-      .sort({ createdAt: -1 })
+      .sort(sortObj)
       .skip(skip)
       .limit(Number(limit)),
     PG.countDocuments(filter),

@@ -122,6 +122,8 @@ const lifestyleJoi = Joi.object({
   drinking: Joi.boolean(),
   pets: Joi.boolean(),
   sleepSchedule: Joi.string().valid('early-bird', 'night-owl', 'flexible'),
+  cleanliness: Joi.string().valid('very-clean', 'moderate', 'relaxed'),
+  guests: Joi.string().valid('often', 'sometimes', 'rarely', 'never'),
 });
 
 const preferredRoommateJoi = Joi.object({
@@ -129,10 +131,12 @@ const preferredRoommateJoi = Joi.object({
   ageMin: Joi.number().integer().min(18),
   ageMax: Joi.number().integer().max(120),
   occupation: Joi.string().max(100),
+  religion: Joi.string(),
+  foodPreference: Joi.string(),
 });
 
 const requirementSchema = Joi.object({
-  type: Joi.string().valid('room', 'flatmate').required(),
+  type: Joi.string().valid('flatmate').default('flatmate'),
   title: Joi.string().max(200).required(),
   description: Joi.string().max(2000),
   budget: Joi.object({
@@ -141,16 +145,24 @@ const requirementSchema = Joi.object({
   }).required(),
   location: Joi.string().required(),
   moveInDate: Joi.date().iso(),
+  gender: Joi.string().valid('male', 'female', 'non-binary'),
+  age: Joi.number().integer().min(18).max(120),
+  occupation: Joi.string().valid('student', 'working-professional', 'freelancer', 'business', 'other'),
+  religion: Joi.string().valid('hindu', 'muslim', 'christian', 'sikh', 'jain', 'buddhist', 'no-preference', 'other'),
+  foodPreference: Joi.string().valid('veg', 'non-veg', 'eggetarian', 'vegan', 'no-preference'),
+  languages: Joi.array().items(Joi.string()),
+  roomType: Joi.string().valid('single', 'shared', 'any'),
   preferredRoommate: preferredRoommateJoi,
   lifestyle: lifestyleJoi,
+  lifestyleTags: Joi.array().items(Joi.string()).min(5),
   notes: Joi.string().max(1000),
-  images: Joi.array().items(Joi.string().uri()).max(8),
+  images: Joi.array().items(Joi.string().uri()).max(3),
   phoneVisibility: Joi.string().valid('masked', 'reveal'),
   contactPhone: Joi.string().pattern(phonePattern),
 });
 
 const requirementUpdateSchema = Joi.object({
-  type: Joi.string().valid('room', 'flatmate'),
+  type: Joi.string().valid('flatmate'),
   title: Joi.string().max(200),
   description: Joi.string().max(2000),
   budget: Joi.object({
@@ -159,6 +171,13 @@ const requirementUpdateSchema = Joi.object({
   }),
   location: Joi.string(),
   moveInDate: Joi.date().iso(),
+  gender: Joi.string().valid('male', 'female', 'non-binary'),
+  age: Joi.number().integer().min(18).max(120),
+  occupation: Joi.string().valid('student', 'working-professional', 'freelancer', 'business', 'other'),
+  religion: Joi.string().valid('hindu', 'muslim', 'christian', 'sikh', 'jain', 'buddhist', 'no-preference', 'other'),
+  foodPreference: Joi.string().valid('veg', 'non-veg', 'eggetarian', 'vegan', 'no-preference'),
+  languages: Joi.array().items(Joi.string()),
+  roomType: Joi.string().valid('single', 'shared', 'any'),
   preferredRoommate: preferredRoommateJoi,
   lifestyle: lifestyleJoi,
   notes: Joi.string().max(1000),

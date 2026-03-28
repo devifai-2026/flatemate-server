@@ -13,37 +13,36 @@ const create = async (data, userId) => {
  */
 const getAll = async (query) => {
   const {
-    type,
-    location,
-    minBudget,
-    maxBudget,
-    gender,
-    smoking,
-    drinking,
-    pets,
-    sleepSchedule,
-    page = 1,
-    limit = 10,
+    location, minBudget, maxBudget, gender, foodPreference, religion, occupation,
+    smoking, drinking, pets, sleepSchedule, roomType, sort,
+    page = 1, limit = 10,
   } = query;
 
   const filter = { isActive: true };
 
-  if (type) filter.type = type;
   if (location) filter.location = new RegExp(location, 'i');
   if (minBudget) filter['budget.max'] = { $gte: Number(minBudget) };
   if (maxBudget) filter['budget.min'] = { $lte: Number(maxBudget) };
-  if (gender) filter['preferredRoommate.gender'] = gender;
+  if (gender) filter.gender = gender;
+  if (foodPreference) filter.foodPreference = foodPreference;
+  if (religion) filter.religion = religion;
+  if (occupation) filter.occupation = occupation;
+  if (roomType) filter.roomType = roomType;
   if (smoking !== undefined) filter['lifestyle.smoking'] = smoking === 'true';
   if (drinking !== undefined) filter['lifestyle.drinking'] = drinking === 'true';
   if (pets !== undefined) filter['lifestyle.pets'] = pets === 'true';
   if (sleepSchedule) filter['lifestyle.sleepSchedule'] = sleepSchedule;
 
+  let sortObj = { createdAt: -1 };
+  if (sort === 'budget') sortObj = { 'budget.max': 1 };
+  else if (sort === '-budget') sortObj = { 'budget.max': -1 };
+
   const skip = (Number(page) - 1) * Number(limit);
 
   const [requirements, total] = await Promise.all([
     Requirement.find(filter)
-      .populate('createdBy', 'name email age gender occupation bio profileImage verified')
-      .sort({ createdAt: -1 })
+      .populate('createdBy', 'name email age gender occupation bio profileImage verified city')
+      .sort(sortObj)
       .skip(skip)
       .limit(Number(limit)),
     Requirement.countDocuments(filter),

@@ -18,6 +18,7 @@ const getAll = async (query) => {
     maxRent,
     amenities,
     preferredTenant,
+    sort,
     page = 1,
     limit = 10,
   } = query;
@@ -38,10 +39,14 @@ const getAll = async (query) => {
 
   const skip = (Number(page) - 1) * Number(limit);
 
+  let sortObj = { createdAt: -1 };
+  if (sort === 'rent') sortObj = { rent: 1 };
+  else if (sort === '-rent') sortObj = { rent: -1 };
+
   const [rooms, total] = await Promise.all([
     Room.find(filter)
       .populate('postedBy', 'name email verified')
-      .sort({ createdAt: -1 })
+      .sort(sortObj)
       .skip(skip)
       .limit(Number(limit)),
     Room.countDocuments(filter),

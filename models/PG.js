@@ -55,6 +55,10 @@ const pgSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    mealType: {
+      type: String,
+      enum: ['veg', 'non-veg', 'both'],
+    },
     images: {
       type: [String],
       default: [],
