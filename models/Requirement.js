@@ -117,10 +117,8 @@ const requirementSchema = new mongoose.Schema(
       type: String,
       maxlength: 1000,
     },
-    isActive: {
-      type: Boolean,
-      default: true,
-    },
+    isActive: { type: Boolean, default: true },
+    isHidden: { type: Boolean, default: false },
 
     // ── Phone visibility ──
     phoneVisibility: {

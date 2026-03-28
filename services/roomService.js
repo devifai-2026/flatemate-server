@@ -18,7 +18,7 @@ const getAll = async (query) => {
     page = 1, limit = 10,
   } = query;
 
-  const filter = {};
+  const filter = { isHidden: { $ne: true } };
 
   if (location) filter.location = new RegExp(location, 'i');
   if (minRent || maxRent) {
@@ -43,7 +43,7 @@ const getAll = async (query) => {
 
   const [rooms, total] = await Promise.all([
     Room.find(filter)
-      .populate('postedBy', 'name email verified')
+      .populate('postedBy', 'name email verified profileImage')
       .sort(sortObj)
       .skip(skip)
       .limit(Number(limit)),
@@ -64,7 +64,7 @@ const getAll = async (query) => {
  * Get a single room by ID.
  */
 const getById = async (id) => {
-  const room = await Room.findById(id).populate('postedBy', 'name email verified');
+  const room = await Room.findById(id).populate('postedBy', 'name email verified profileImage phone city');
   if (!room) throw new AppError('Room not found', 404);
   return room;
 };

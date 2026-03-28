@@ -20,7 +20,7 @@ const getAll = async (query) => {
     limit = 10,
   } = query;
 
-  const filter = {};
+  const filter = { isHidden: { $ne: true } };
   if (city) filter.city = new RegExp(city, 'i');
   if (location) filter.location = new RegExp(location, 'i');
   if (gender) filter.gender = gender;

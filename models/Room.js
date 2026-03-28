@@ -69,6 +69,8 @@ const roomSchema = new mongoose.Schema(
       enum: ['bike', 'car', 'both', 'none'],
     },
 
+    isHidden: { type: Boolean, default: false },
+
     // ── Phone visibility ──
     phoneVisibility: {
       type: String,

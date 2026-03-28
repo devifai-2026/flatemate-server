@@ -71,6 +71,7 @@ const pgSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    isHidden: { type: Boolean, default: false },
     phoneVisibility: {
       type: String,
       enum: ['masked', 'reveal'],

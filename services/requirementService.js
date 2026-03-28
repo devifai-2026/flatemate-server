@@ -18,7 +18,7 @@ const getAll = async (query) => {
     page = 1, limit = 10,
   } = query;
 
-  const filter = { isActive: true };
+  const filter = { isActive: true, isHidden: { $ne: true } };
 
   if (location) filter.location = new RegExp(location, 'i');
   if (minBudget) filter['budget.max'] = { $gte: Number(minBudget) };
