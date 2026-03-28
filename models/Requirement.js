@@ -77,6 +77,10 @@ const requirementSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    images: {
+      type: [String],
+      default: [],
+    },
   },
   { timestamps: true }
 );

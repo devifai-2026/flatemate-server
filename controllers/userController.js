@@ -13,10 +13,16 @@ const updatePreferences = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, data: user });
 });
 
+/** PUT /api/users/me */
+const updateMe = asyncHandler(async (req, res) => {
+  const user = await userService.updateProfile(req.user.id, req.body);
+  res.status(200).json({ success: true, data: user });
+});
+
 /** GET /api/users/:id — public profile */
 const getUser = asyncHandler(async (req, res) => {
   const user = await userService.getProfile(req.params.id);
   res.status(200).json({ success: true, data: user });
 });
 
-module.exports = { getMe, updatePreferences, getUser };
+module.exports = { getMe, updateMe, updatePreferences, getUser };

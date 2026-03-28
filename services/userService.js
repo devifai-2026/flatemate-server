@@ -23,4 +23,18 @@ const updatePreferences = async (userId, preferences) => {
   return user;
 };
 
-module.exports = { getProfile, updatePreferences };
+/**
+ * Update own profile (name, profileImage, age, gender, etc.)
+ */
+const updateProfile = async (userId, data) => {
+  const allowed = ['name', 'profileImage', 'age', 'gender', 'occupation', 'bio', 'city', 'email'];
+  const update = {};
+  for (const key of allowed) {
+    if (data[key] !== undefined) update[key] = data[key];
+  }
+  const user = await User.findByIdAndUpdate(userId, update, { new: true, runValidators: true });
+  if (!user) throw new AppError('User not found', 404);
+  return user;
+};
+
+module.exports = { getProfile, updatePreferences, updateProfile };
