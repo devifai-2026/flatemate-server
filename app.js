@@ -69,6 +69,30 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/tickets', ticketRoutes);
 
+// ── Deep Link Verification (Universal Links / App Links) ──
+app.get('/.well-known/apple-app-site-association', (req, res) => {
+  res.json({
+    applinks: {
+      apps: [],
+      details: [{
+        appID: 'TEAM_ID.in.justflatmate.app',
+        paths: ['/rooms/*', '/pgs/*', '/roommates/*'],
+      }],
+    },
+  });
+});
+
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  res.json([{
+    relation: ['delegate_permission/common.handle_all_urls'],
+    target: {
+      namespace: 'android_app',
+      package_name: 'in.justflatmate.app',
+      sha256_cert_fingerprints: [],
+    },
+  }]);
+});
+
 // Root route
 app.get('/', (req, res) => {
   res.json({

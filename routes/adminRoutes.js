@@ -29,10 +29,12 @@ router.post('/login', asyncHandler(async (req, res) => {
   if (!email || !password) throw new AppError('Email and password are required', 400);
 
   const user = await User.findOne({ email: email.toLowerCase(), isAdmin: true }).select('+password');
+  console.log('[ADMIN LOGIN]', { email: email.toLowerCase(), found: !!user, hasPassword: !!user?.password });
   if (!user) throw new AppError('Invalid email or password', 401);
   if (!user.password) throw new AppError('Password not set for this account. Contact super admin.', 401);
 
   const isMatch = await user.comparePassword(password);
+  console.log('[ADMIN LOGIN] password match:', isMatch);
   if (!isMatch) throw new AppError('Invalid email or password', 401);
 
   const token = jwt.sign(
