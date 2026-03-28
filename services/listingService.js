@@ -22,17 +22,20 @@ const getMyListings = async (userId) => {
     ...requirements.map((r) => ({ id: r._id, type: 'requirement' })),
   ];
 
-  const unlockCounts = await UnlockedListing.aggregate([
-    {
-      $match: {
-        $or: allIds.map((item) => ({
-          listingId: item.id,
-          listingType: item.type,
-        })),
+  let unlockCounts = [];
+  if (allIds.length > 0) {
+    unlockCounts = await UnlockedListing.aggregate([
+      {
+        $match: {
+          $or: allIds.map((item) => ({
+            listingId: item.id,
+            listingType: item.type,
+          })),
+        },
       },
-    },
-    { $group: { _id: { listingId: '$listingId', listingType: '$listingType' }, count: { $sum: 1 } } },
-  ]);
+      { $group: { _id: { listingId: '$listingId', listingType: '$listingType' }, count: { $sum: 1 } } },
+    ]);
+  }
 
   const countMap = {};
   unlockCounts.forEach((u) => {
