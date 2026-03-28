@@ -6,6 +6,35 @@ const MESSAGECENTRAL_BASE = process.env.MESSAGECENTRAL_BASE_URL || 'https://cpaa
 const IS_DEV = process.env.NODE_ENV !== 'production';
 const DEV_OTP = '123456';
 
+// Get fresh auth token from MessageCentral
+const getMessageCentralToken = async () => {
+  const customerId = process.env.MESSAGECENTRAL_CUSTOMER_ID;
+  const email = process.env.MESSAGECENTRAL_EMAIL;
+  const password = process.env.MESSAGECENTRAL_PASSWORD;
+
+  // If email/password provided, generate fresh token
+  if (email && password) {
+    const encodedPwd = Buffer.from(password).toString('base64');
+    const loginUrl = `${MESSAGECENTRAL_BASE}/auth/v1/authentication/token?country=91&customerId=${customerId}&email=${encodeURIComponent(email)}&key=${encodedPwd}&scope=NEW`;
+    console.log(`[OTP] Generating fresh MessageCentral token...`);
+
+    const res = await fetch(loginUrl, { method: 'GET' });
+    const body = await res.text();
+    console.log(`[OTP] Token response status: ${res.status}`);
+    console.log(`[OTP] Token response: ${body}`);
+
+    let parsed;
+    try { parsed = JSON.parse(body); } catch { throw new AppError('Failed to authenticate with MessageCentral', 502); }
+
+    if (parsed.token) return parsed.token;
+    if (parsed.data?.token) return parsed.data.token;
+    throw new AppError('Failed to get MessageCentral token', 502);
+  }
+
+  // Fallback to static token from env
+  return process.env.MESSAGECENTRAL_AUTH_TOKEN;
+};
+
 /**
  * Send OTP to a phone number.
  * Dev mode (npm run dev): hardcoded OTP 123456, no SMS sent.
@@ -40,12 +69,13 @@ const sendOtp = async (phone) => {
 
   // Production — real SMS via MessageCentral
   console.log(`[OTP] PROD MODE — calling MessageCentral for ${cleanPhone}`);
-  const url = `${MESSAGECENTRAL_BASE}/verification/v3/send?countryCode=91&customerId=${process.env.MESSAGECENTRAL_CUSTOMER_ID}&senderId=UTOMOB&type=SMS&flowType=SMS&mobileNumber=${cleanPhone}`;
+  const authToken = await getMessageCentralToken();
+  const url = `${MESSAGECENTRAL_BASE}/verification/v3/send?countryCode=91&customerId=${process.env.MESSAGECENTRAL_CUSTOMER_ID}&flowType=SMS&mobileNumber=${cleanPhone}`;
   console.log(`[OTP] Request URL: ${url}`);
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { authToken: process.env.MESSAGECENTRAL_AUTH_TOKEN },
+    headers: { authToken },
   });
 
   const text = await response.text();
@@ -102,12 +132,13 @@ const verifyOtp = async (phone, otpCode) => {
     }
   } else {
     // Production — validate with MessageCentral
+    const verifyToken = await getMessageCentralToken();
     const validateUrl = `${MESSAGECENTRAL_BASE}/verification/v3/validateOtp?customerId=${process.env.MESSAGECENTRAL_CUSTOMER_ID}&verificationId=${user.otp.verificationId}&code=${otpCode}`;
     console.log(`[OTP] PROD verify — calling MessageCentral: ${validateUrl}`);
 
     const validateResponse = await fetch(validateUrl, {
       method: 'GET',
-      headers: { authToken: process.env.MESSAGECENTRAL_AUTH_TOKEN },
+      headers: { authToken: verifyToken },
     });
 
     const valText = await validateResponse.text();
