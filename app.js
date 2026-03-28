@@ -27,6 +27,7 @@ const app = express();
 
 // ── Global Middleware ──
 app.use(helmet());
+
 app.use(cors());
 app.use(express.json({ limit: '10kb' }));
 
@@ -54,6 +55,16 @@ app.use('/api/pgs', pgRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/wallet', walletRoutes);
+
+// Root route
+app.get('/', (req, res) => {
+  res.json({
+    name: 'FlatMate API',
+    version: '1.0.0',
+    env: process.env.NODE_ENV,
+    status: 'running',
+  });
+});
 
 // Health check
 app.get('/health', (req, res) => {
