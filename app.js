@@ -32,7 +32,7 @@ const path = require('path');
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 app.use(cors());
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '1mb' }));
 
 // Serve uploaded files (chat media)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
