@@ -26,11 +26,16 @@ const listingRoutes = require('./routes/listingRoutes');
 
 const app = express();
 
+const path = require('path');
+
 // ── Global Middleware ──
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
 app.use(cors());
 app.use(express.json({ limit: '10kb' }));
+
+// Serve uploaded files (chat media)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));

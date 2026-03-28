@@ -175,8 +175,11 @@ const verifyOtp = async (phone, otpCode) => {
       _id: user._id,
       phone: user.phone,
       name: user.name,
+      firstName: user.firstName,
+      surname: user.surname,
       verified: user.verified,
-      onboardingComplete: user.onboardingComplete,
+      onboardingComplete: !!user.onboardingComplete,
+      profileImage: user.profileImage,
     },
     isNewUser,
   };
