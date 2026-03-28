@@ -495,6 +495,11 @@ router.get('/chats/:conversationId/messages', asyncHandler(async (req, res) => {
 // TICKETS
 // ═══════════════════════════════════════════
 
+router.get('/tickets/badge-count', asyncHandler(async (req, res) => {
+  const count = await Ticket.countDocuments({ status: { $in: ['open', 'in-progress'] } });
+  res.json({ success: true, data: { count } });
+}));
+
 router.get('/tickets', asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, status, priority, category } = req.query;
   const filter = {};
@@ -525,6 +530,14 @@ router.put('/tickets/:id/status', asyncHandler(async (req, res) => {
   if (status === 'resolved' || status === 'closed') ticket.resolvedAt = new Date();
   if (status === 'in-progress' && !ticket.assignedTo) ticket.assignedTo = req.user.id;
   await ticket.save();
+
+  // Notify user + admins via socket
+  const io = req.app.get('io');
+  if (io) {
+    io.to(`user:${ticket.user.toString()}`).emit('ticket-status', { ticketId: ticket._id.toString(), status });
+    io.to('admin-room').emit('ticket-status', { ticketId: ticket._id.toString(), status });
+  }
+
   res.json({ success: true, data: ticket });
 }));
 
@@ -548,13 +561,15 @@ router.post('/tickets/:id/messages', asyncHandler(async (req, res) => {
     await ticket.save();
   }
 
-  // Notify user
+  const populated = await TicketMessage.findById(msg._id).populate('sender', 'name profileImage').lean();
+
+  // Notify user + admins
   const io = req.app.get('io');
   if (io) {
-    io.to(`user:${ticket.user.toString()}`).emit('ticket-update', { ticketId: ticket._id.toString(), message: msg });
+    io.to(`user:${ticket.user.toString()}`).emit('ticket-message', { ticketId: ticket._id.toString(), message: populated, fromUser: false });
+    io.to('admin-room').emit('ticket-message', { ticketId: ticket._id.toString(), message: populated, fromUser: false });
   }
 
-  const populated = await TicketMessage.findById(msg._id).populate('sender', 'name profileImage').lean();
   res.json({ success: true, data: populated });
 }));
 
@@ -619,7 +634,7 @@ router.get('/guests/:id', asyncHandler(async (req, res) => {
 router.get('/api-logs/errors', asyncHandler(async (req, res) => {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const errors = await ApiLog.aggregate([
-    { $match: { statusCode: { $gte: 400 }, createdAt: { $gte: sevenDaysAgo } } },
+    { $match: { statusCode: { $gte: 500 }, createdAt: { $gte: sevenDaysAgo } } },
     { $group: {
       _id: { method: '$method', path: '$path', status: '$statusCode' },
       count: { $sum: 1 },
@@ -655,7 +670,7 @@ router.get('/api-logs/stats', asyncHandler(async (req, res) => {
   const [totalToday, totalWeek, errorCount, topEndpoints, avgResponseTime, hourlyTraffic] = await Promise.all([
     ApiLog.countDocuments({ createdAt: { $gte: today } }),
     ApiLog.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
-    ApiLog.countDocuments({ createdAt: { $gte: today }, statusCode: { $gte: 400 } }),
+    ApiLog.countDocuments({ createdAt: { $gte: today }, statusCode: { $gte: 500 } }),
     ApiLog.aggregate([
       { $match: { createdAt: { $gte: sevenDaysAgo } } },
       { $group: { _id: { method: '$method', path: '$path' }, count: { $sum: 1 }, avgTime: { $avg: '$responseTime' } } },
@@ -675,7 +690,7 @@ router.get('/api-logs/stats', asyncHandler(async (req, res) => {
 
   // Error breakdown by endpoint
   const errorBreakdown = await ApiLog.aggregate([
-    { $match: { createdAt: { $gte: sevenDaysAgo }, statusCode: { $gte: 400 } } },
+    { $match: { createdAt: { $gte: sevenDaysAgo }, statusCode: { $gte: 500 } } },
     { $group: { _id: { method: '$method', path: '$path', status: '$statusCode' }, count: { $sum: 1 }, lastSeen: { $max: '$createdAt' } } },
     { $sort: { count: -1 } },
     { $limit: 20 },
@@ -694,7 +709,7 @@ router.get('/api-logs/stats', asyncHandler(async (req, res) => {
     { $group: {
       _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
       total: { $sum: 1 },
-      errors: { $sum: { $cond: [{ $gte: ['$statusCode', 400] }, 1, 0] } },
+      errors: { $sum: { $cond: [{ $gte: ['$statusCode', 500] }, 1, 0] } },
       avgTime: { $avg: '$responseTime' },
     }},
     { $sort: { _id: 1 } },

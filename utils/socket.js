@@ -32,6 +32,14 @@ const initSocket = (io) => {
     // Join personal room
     socket.join(`user:${userId}`);
 
+    // Admin users join admin room for ticket notifications
+    const User = require('../models/User');
+    const adminUser = await User.findById(userId).select('isAdmin').lean();
+    if (adminUser?.isAdmin) {
+      socket.join('admin-room');
+      console.log(`[Socket] Admin joined admin-room: ${userId}`);
+    }
+
     // Mark pending messages as delivered + notify senders
     try {
       const deliveredResult = await chatService.markAsDelivered(userId);

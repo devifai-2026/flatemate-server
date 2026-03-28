@@ -17,6 +17,13 @@ router.post('/', asyncHandler(async (req, res) => {
   // Create initial message from description
   await TicketMessage.create({ ticket: ticket._id, sender: req.user.id, senderRole: 'user', text: description.trim() });
 
+  // Notify admins via socket
+  const io = req.app.get('io');
+  if (io) {
+    const populated = await Ticket.findById(ticket._id).populate('user', 'name phone profileImage email').lean();
+    io.to('admin-room').emit('ticket-created', populated);
+  }
+
   res.status(201).json({ success: true, data: ticket });
 }));
 
@@ -44,6 +51,13 @@ router.post('/:id/messages', asyncHandler(async (req, res) => {
 
   const msg = await TicketMessage.create({ ticket: req.params.id, sender: req.user.id, senderRole: 'user', text: text.trim() });
   const populated = await TicketMessage.findById(msg._id).populate('sender', 'name profileImage').lean();
+
+  // Notify admins via socket
+  const io = req.app.get('io');
+  if (io) {
+    io.to('admin-room').emit('ticket-message', { ticketId: ticket._id.toString(), message: populated, fromUser: true });
+  }
+
   res.json({ success: true, data: populated });
 }));
 
