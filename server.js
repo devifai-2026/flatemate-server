@@ -31,7 +31,7 @@ const start = async () => {
   app.set('io', io);
 
   server.listen(PORT, () => {
-    const base = IS_PROD ? 'https://justflatmate.in' : `http://localhost:${PORT}`;
+    const base = process.env.BASE_URL || `http://localhost:${PORT}`;
     console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
     console.log(`API: ${base}`);
     console.log(`Socket.io ready on port ${PORT}`);
