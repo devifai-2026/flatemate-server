@@ -70,7 +70,7 @@ const sendOtp = async (phone) => {
   // Production — real SMS via MessageCentral
   console.log(`[OTP] PROD MODE — calling MessageCentral for ${cleanPhone}`);
   const authToken = await getMessageCentralToken();
-  const url = `${MESSAGECENTRAL_BASE}/verification/v3/send?countryCode=91&customerId=${process.env.MESSAGECENTRAL_CUSTOMER_ID}&flowType=SMS&mobileNumber=${cleanPhone}`;
+  const url = `${MESSAGECENTRAL_BASE}/verification/v3/send?countryCode=91&customerId=${process.env.MESSAGECENTRAL_CUSTOMER_ID}&flowType=SMS&mobileNumber=${cleanPhone}&otpLength=6`;
   console.log(`[OTP] Request URL: ${url}`);
 
   const response = await fetch(url, {
