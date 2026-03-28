@@ -57,6 +57,11 @@ const sendOtp = async (phone) => {
 
   if (!response.ok || (data.responseCode && data.responseCode !== 200)) {
     console.error(`[OTP] MessageCentral FAILED:`, data);
+    // Rate limit — timeout means wait before retrying
+    if (data.data?.timeout) {
+      const secs = Math.ceil(parseFloat(data.data.timeout));
+      throw new AppError(`Please wait ${secs} seconds before requesting another OTP`, 429);
+    }
     throw new AppError(data.message || 'Failed to send OTP', 502);
   }
 
