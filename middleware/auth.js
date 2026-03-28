@@ -1,17 +1,16 @@
 const jwt = require('jsonwebtoken');
 const AppError = require('../utils/AppError');
+const User = require('../models/User');
 
 /**
  * Protects routes by verifying JWT token from Authorization header.
  * Attaches decoded user payload to req.user.
+ * Rejects blocked users.
  */
-const protect = (req, res, next) => {
+const protect = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
-  console.log(`[AUTH] ${req.method} ${req.originalUrl} — authHeader: ${authHeader ? 'present' : 'MISSING'}`);
-
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.log(`[AUTH] REJECTED — no Bearer token. Headers:`, JSON.stringify(req.headers));
     return next(new AppError('Not authorized — no token provided', 401));
   }
 
@@ -19,10 +18,16 @@ const protect = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Check if user is blocked
+    const user = await User.findById(decoded.id).select('isBlocked').lean();
+    if (user?.isBlocked) {
+      return next(new AppError('Your account has been blocked. Contact support.', 403));
+    }
+
     req.user = decoded;
     next();
   } catch (err) {
-    console.log(`[AUTH] REJECTED — invalid token:`, err.message);
     return next(new AppError('Not authorized — invalid token', 401));
   }
 };

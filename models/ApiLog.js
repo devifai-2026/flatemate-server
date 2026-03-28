@@ -10,6 +10,7 @@ const apiLogSchema = new mongoose.Schema(
     userAgent: String,
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     isGuest: { type: Boolean, default: true },
+    isAdmin: { type: Boolean, default: false },
     error: String,
   },
   { timestamps: true }

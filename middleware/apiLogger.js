@@ -25,6 +25,9 @@ const apiLogger = (req, res, next) => {
       } catch (_) {}
     }
 
+    // Check if admin (set by adminOnly middleware or from admin routes)
+    const isAdmin = req.originalUrl.startsWith('/api/admin') && !isGuest;
+
     // Fire and forget — don't block the response
     ApiLog.create({
       method: req.method,
@@ -35,6 +38,7 @@ const apiLogger = (req, res, next) => {
       userAgent: req.headers['user-agent'],
       userId,
       isGuest,
+      isAdmin,
       error: res.statusCode >= 400 ? res.statusMessage : undefined,
     }).catch(() => {});
 

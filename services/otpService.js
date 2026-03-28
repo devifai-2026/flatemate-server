@@ -114,8 +114,12 @@ const verifyOtp = async (phone, otpCode) => {
   const cleanPhone = phone.replace(/^\+91/, '').replace(/\s/g, '');
   console.log(`[OTP] verifyOtp called — phone: ${cleanPhone}, code: ${otpCode}, IS_DEV: ${IS_DEV}`);
 
-  const user = await User.findOne({ phone: cleanPhone }).select('+otp.verificationId +otp.expiresAt +otp.code');
+  const user = await User.findOne({ phone: cleanPhone }).select('+otp.verificationId +otp.expiresAt +otp.code +isBlocked');
   if (!user) throw new AppError('No OTP request found for this number', 400);
+
+  if (user.isBlocked) {
+    throw new AppError('Your account has been blocked. Contact support.', 403);
+  }
 
   if (!user.otp?.verificationId) {
     throw new AppError('No OTP request found. Please request a new OTP', 400);

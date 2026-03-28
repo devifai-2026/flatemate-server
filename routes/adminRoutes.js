@@ -213,6 +213,29 @@ router.get('/analytics', asyncHandler(async (req, res) => {
 }));
 
 // ═══════════════════════════════════════════
+// LISTING COUNTS & RECENT LISTINGS
+// ═══════════════════════════════════════════
+
+router.get('/listings/counts', asyncHandler(async (req, res) => {
+  const [rooms, pgs, requirements] = await Promise.all([
+    Room.countDocuments(),
+    PG.countDocuments(),
+    Requirement.countDocuments(),
+  ]);
+  res.json({ success: true, data: { rooms, pgs, requirements } });
+}));
+
+router.get('/listings/recent', asyncHandler(async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 5, 20);
+  const [rooms, pgs, requirements] = await Promise.all([
+    Room.find().populate('postedBy', 'name phone profileImage').sort({ createdAt: -1 }).limit(limit).lean(),
+    PG.find().populate('postedBy', 'name phone profileImage').sort({ createdAt: -1 }).limit(limit).lean(),
+    Requirement.find().populate('createdBy', 'name phone profileImage').sort({ createdAt: -1 }).limit(limit).lean(),
+  ]);
+  res.json({ success: true, data: { rooms, pgs, requirements } });
+}));
+
+// ═══════════════════════════════════════════
 // USERS
 // ═══════════════════════════════════════════
 
@@ -250,6 +273,39 @@ router.get('/users/:id', asyncHandler(async (req, res) => {
   ]);
 
   res.json({ success: true, data: { user, rooms, pgs, requirements, wishlist, teams, transactions, conversations } });
+}));
+
+router.put('/users/:id/block', asyncHandler(async (req, res) => {
+  const targetUser = await User.findById(req.params.id);
+  if (!targetUser) return res.status(404).json({ success: false, message: 'User not found' });
+
+  // Can't block yourself
+  if (req.params.id === req.user.id) {
+    throw new AppError('You cannot block yourself', 400);
+  }
+  // Can't block another admin
+  if (targetUser.isAdmin) {
+    throw new AppError('Cannot block an admin user', 403);
+  }
+
+  targetUser.isBlocked = true;
+  targetUser.blockedAt = new Date();
+  targetUser.blockedBy = req.user.id;
+  await targetUser.save();
+
+  res.json({ success: true, message: 'User blocked', data: targetUser });
+}));
+
+router.put('/users/:id/unblock', asyncHandler(async (req, res) => {
+  const targetUser = await User.findById(req.params.id);
+  if (!targetUser) return res.status(404).json({ success: false, message: 'User not found' });
+
+  targetUser.isBlocked = false;
+  targetUser.blockedAt = undefined;
+  targetUser.blockedBy = undefined;
+  await targetUser.save();
+
+  res.json({ success: true, message: 'User unblocked', data: targetUser });
 }));
 
 // ═══════════════════════════════════════════
@@ -457,6 +513,22 @@ router.get('/guests/:id', asyncHandler(async (req, res) => {
 // API ACTIVITY
 // ═══════════════════════════════════════════
 
+router.get('/api-logs/errors', asyncHandler(async (req, res) => {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const errors = await ApiLog.aggregate([
+    { $match: { statusCode: { $gte: 400 }, createdAt: { $gte: sevenDaysAgo } } },
+    { $group: {
+      _id: { method: '$method', path: '$path', status: '$statusCode' },
+      count: { $sum: 1 },
+      lastSeen: { $max: '$createdAt' },
+      lastError: { $last: '$error' },
+    }},
+    { $sort: { count: -1 } },
+    { $limit: 20 },
+  ]);
+  res.json({ success: true, data: errors });
+}));
+
 router.get('/api-logs', asyncHandler(async (req, res) => {
   const { page = 1, limit = 50, method, path, status } = req.query;
   const filter = {};
@@ -498,6 +570,40 @@ router.get('/api-logs/stats', asyncHandler(async (req, res) => {
     ]),
   ]);
 
+  // Error breakdown by endpoint
+  const errorBreakdown = await ApiLog.aggregate([
+    { $match: { createdAt: { $gte: sevenDaysAgo }, statusCode: { $gte: 400 } } },
+    { $group: { _id: { method: '$method', path: '$path', status: '$statusCode' }, count: { $sum: 1 }, lastSeen: { $max: '$createdAt' } } },
+    { $sort: { count: -1 } },
+    { $limit: 20 },
+  ]);
+
+  // Response time scatter data (sampled)
+  const responseTimeDistribution = await ApiLog.aggregate([
+    { $match: { createdAt: { $gte: today } } },
+    { $project: { hour: { $hour: '$createdAt' }, minute: { $minute: '$createdAt' }, responseTime: 1, statusCode: 1, method: 1, path: 1 } },
+    { $sample: { size: 200 } },
+  ]);
+
+  // Daily request counts for last 7 days
+  const dailyRequests = await ApiLog.aggregate([
+    { $match: { createdAt: { $gte: sevenDaysAgo } } },
+    { $group: {
+      _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+      total: { $sum: 1 },
+      errors: { $sum: { $cond: [{ $gte: ['$statusCode', 400] }, 1, 0] } },
+      avgTime: { $avg: '$responseTime' },
+    }},
+    { $sort: { _id: 1 } },
+  ]);
+
+  // Status code distribution
+  const statusDistribution = await ApiLog.aggregate([
+    { $match: { createdAt: { $gte: sevenDaysAgo } } },
+    { $group: { _id: '$statusCode', count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+  ]);
+
   res.json({
     success: true,
     data: {
@@ -507,6 +613,10 @@ router.get('/api-logs/stats', asyncHandler(async (req, res) => {
       topEndpoints,
       avgResponseTime: avgResponseTime[0]?.avg || 0,
       hourlyTraffic,
+      errorBreakdown,
+      responseTimeDistribution,
+      dailyRequests,
+      statusDistribution,
     },
   });
 }));
@@ -517,20 +627,23 @@ router.get('/api-logs/stats', asyncHandler(async (req, res) => {
 
 router.get('/db-stats', asyncHandler(async (req, res) => {
   const db = mongoose.connection.db;
-  const dbStats = await db.stats();
+  const dbStats = await db.command({ dbStats: 1 });
 
   const collections = await db.listCollections().toArray();
   const collectionStats = await Promise.all(
     collections.map(async (col) => {
-      const stats = await db.collection(col.name).stats();
+      const [stats] = await db.collection(col.name).aggregate([
+        { $collStats: { storageStats: {} } },
+      ]).toArray();
+      const s = stats?.storageStats || {};
       return {
         name: col.name,
-        count: stats.count,
-        size: stats.size,
-        avgObjSize: stats.avgObjSize || 0,
-        storageSize: stats.storageSize,
-        indexes: stats.nindexes,
-        indexSize: stats.totalIndexSize,
+        count: s.count || 0,
+        size: s.size || 0,
+        avgObjSize: s.avgObjSize || 0,
+        storageSize: s.storageSize || 0,
+        indexes: s.nindexes || 0,
+        indexSize: s.totalIndexSize || 0,
       };
     })
   );
