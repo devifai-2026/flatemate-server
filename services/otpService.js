@@ -4,7 +4,7 @@ const AppError = require('../utils/AppError');
 
 const MESSAGECENTRAL_BASE = process.env.MESSAGECENTRAL_BASE_URL || 'https://cpaas.messagecentral.com';
 const IS_DEV = process.env.NODE_ENV !== 'production';
-const DEV_OTP = '123456';
+const DEV_OTP = '1234';
 
 // Get fresh auth token from MessageCentral
 const getMessageCentralToken = async () => {
@@ -70,7 +70,7 @@ const sendOtp = async (phone) => {
   // Production — real SMS via MessageCentral
   console.log(`[OTP] PROD MODE — calling MessageCentral for ${cleanPhone}`);
   const authToken = await getMessageCentralToken();
-  const url = `${MESSAGECENTRAL_BASE}/verification/v3/send?countryCode=91&customerId=${process.env.MESSAGECENTRAL_CUSTOMER_ID}&flowType=SMS&mobileNumber=${cleanPhone}&otpLength=6`;
+  const url = `${MESSAGECENTRAL_BASE}/verification/v3/send?countryCode=91&customerId=${process.env.MESSAGECENTRAL_CUSTOMER_ID}&flowType=SMS&mobileNumber=${cleanPhone}`;
   console.log(`[OTP] Request URL: ${url}`);
 
   const response = await fetch(url, {

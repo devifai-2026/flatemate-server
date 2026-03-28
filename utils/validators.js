@@ -40,8 +40,8 @@ const sendOtpSchema = Joi.object({
 
 const verifyOtpSchema = Joi.object({
   phone: Joi.string().required(),
-  otp: Joi.string().length(6).required()
-    .messages({ 'string.length': 'OTP must be 6 digits' }),
+  otp: Joi.string().length(4).required()
+    .messages({ 'string.length': 'OTP must be 4 digits' }),
 });
 
 // ── Preferences ──
