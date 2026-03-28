@@ -5,6 +5,7 @@ const morgan = require('morgan');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./docs/swagger');
 const errorHandler = require('./middleware/errorHandler');
+const apiLogger = require('./middleware/apiLogger');
 
 // Route imports
 const authRoutes = require('./routes/authRoutes');
@@ -26,6 +27,7 @@ const listingRoutes = require('./routes/listingRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
+const guestRoutes = require('./routes/guestRoutes');
 
 const app = express();
 
@@ -43,6 +45,9 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
+
+// ── API Activity Logger ──
+app.use(apiLogger);
 
 
 // ── Swagger Docs ──
@@ -68,6 +73,7 @@ app.use('/api/listings', listingRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/tickets', ticketRoutes);
+app.use('/api/guest', guestRoutes);
 
 // ── Deep Link Verification (Universal Links / App Links) ──
 app.get('/.well-known/apple-app-site-association', (req, res) => {

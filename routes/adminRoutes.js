@@ -17,6 +17,9 @@ const Team = require('../models/Team');
 const Ticket = require('../models/Ticket');
 const TicketMessage = require('../models/TicketMessage');
 const Wishlist = require('../models/Wishlist');
+const GuestActivity = require('../models/GuestActivity');
+const ApiLog = require('../models/ApiLog');
+const mongoose = require('mongoose');
 
 const router = Router();
 
@@ -28,14 +31,13 @@ router.post('/login', asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) throw new AppError('Email and password are required', 400);
 
-  const user = await User.findOne({ email: email.toLowerCase(), isAdmin: true }).select('+password');
-  console.log('[ADMIN LOGIN]', { email: email.toLowerCase(), found: !!user, hasPassword: !!user?.password });
-  if (!user) throw new AppError('Invalid email or password', 401);
-  if (!user.password) throw new AppError('Password not set for this account. Contact super admin.', 401);
+  const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+  if (!user) throw new AppError('No account found with this email', 401);
+  if (!user.isAdmin) throw new AppError('Access denied. Admin only.', 403);
+  if (!user.password) throw new AppError('Password not set for this account', 401);
 
   const isMatch = await user.comparePassword(password);
-  console.log('[ADMIN LOGIN] password match:', isMatch);
-  if (!isMatch) throw new AppError('Invalid email or password', 401);
+  if (!isMatch) throw new AppError('Invalid password', 401);
 
   const token = jwt.sign(
     { id: user._id, phone: user.phone, verified: true },
@@ -80,21 +82,36 @@ router.use(protect, adminOnly);
 
 router.get('/analytics', asyncHandler(async (req, res) => {
   const now = new Date();
-  const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+  const { period = '1m' } = req.query;
+
+  // Calculate date range based on period
+  let periodStart;
+  if (period === '3m') periodStart = new Date(now - 90 * 24 * 60 * 60 * 1000);
+  else if (period === '6m') periodStart = new Date(now - 180 * 24 * 60 * 60 * 1000);
+  else if (period === 'year') periodStart = new Date(now.getFullYear(), 0, 1);
+  else periodStart = new Date(now - 30 * 24 * 60 * 60 * 1000);
+
   const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+
+  const useWeekly = period !== '1m';
+  const dateGroupExpr = useWeekly
+    ? { $dateToString: { format: '%Y-%U', date: '$createdAt' } }
+    : { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } };
 
   const [
-    totalUsers, newUsersThisMonth, newUsersThisWeek,
+    totalUsers, newUsersThisMonth, newUsersThisWeek, newUsersPeriod,
     totalRooms, totalPGs, totalRequirements,
     hiddenRooms, hiddenPGs, hiddenRequirements,
     totalConversations, totalMessages,
-    totalRecharges, rechargeRevenue,
+    totalRecharges, rechargeRevenue, periodRevenue,
     totalUnlocks, totalTeams,
-    openTickets, totalTickets,
+    openTickets, totalTickets, inProgressTickets, resolvedTickets,
   ] = await Promise.all([
     User.countDocuments(),
     User.countDocuments({ createdAt: { $gte: thirtyDaysAgo } }),
     User.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
+    User.countDocuments({ createdAt: { $gte: periodStart } }),
     Room.countDocuments(),
     PG.countDocuments(),
     Requirement.countDocuments(),
@@ -108,39 +125,89 @@ router.get('/analytics', asyncHandler(async (req, res) => {
       { $match: { type: 'recharge', paymentStatus: 'paid' } },
       { $group: { _id: null, total: { $sum: '$amount' } } },
     ]),
+    WalletTransaction.aggregate([
+      { $match: { type: 'recharge', paymentStatus: 'paid', createdAt: { $gte: periodStart } } },
+      { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+    ]),
     UnlockedListing.countDocuments(),
     Team.countDocuments(),
-    Ticket.countDocuments({ status: { $in: ['open', 'in-progress'] } }),
+    Ticket.countDocuments({ status: 'open' }),
     Ticket.countDocuments(),
+    Ticket.countDocuments({ status: 'in-progress' }),
+    Ticket.countDocuments({ status: { $in: ['resolved', 'closed'] } }),
   ]);
 
-  // Daily signups for last 30 days
+  // Chart data for selected period
   const dailySignups = await User.aggregate([
-    { $match: { createdAt: { $gte: thirtyDaysAgo } } },
-    { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+    { $match: { createdAt: { $gte: periodStart } } },
+    { $group: { _id: dateGroupExpr, count: { $sum: 1 } } },
     { $sort: { _id: 1 } },
   ]);
 
-  // Daily revenue for last 30 days
   const dailyRevenue = await WalletTransaction.aggregate([
-    { $match: { type: 'recharge', paymentStatus: 'paid', createdAt: { $gte: thirtyDaysAgo } } },
-    { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
+    { $match: { type: 'recharge', paymentStatus: 'paid', createdAt: { $gte: periodStart } } },
+    { $group: { _id: dateGroupExpr, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
     { $sort: { _id: 1 } },
+  ]);
+
+  // User type breakdown
+  const userTypeBreakdown = await User.aggregate([
+    { $group: { _id: '$userType', count: { $sum: 1 } } },
+  ]);
+
+  // Monthly signups for trend
+  const monthlySignups = await User.aggregate([
+    { $match: { createdAt: { $gte: periodStart } } },
+    { $group: { _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } }, count: { $sum: 1 } } },
+    { $sort: { _id: 1 } },
+  ]);
+
+  // Monthly revenue for trend
+  const monthlyRevenue = await WalletTransaction.aggregate([
+    { $match: { type: 'recharge', paymentStatus: 'paid', createdAt: { $gte: periodStart } } },
+    { $group: { _id: { $dateToString: { format: '%Y-%m', date: '$createdAt' } }, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
+    { $sort: { _id: 1 } },
+  ]);
+
+  // Recent users (last 10)
+  const recentUsers = await User.find()
+    .sort({ createdAt: -1 })
+    .limit(10)
+    .select('name phone email city userType profileImage createdAt walletBalance verified')
+    .lean();
+
+  // Ticket category breakdown
+  const ticketsByCategory = await Ticket.aggregate([
+    { $group: { _id: '$category', count: { $sum: 1 } } },
+  ]);
+
+  // Listing activity in period
+  const [newRoomsPeriod, newPGsPeriod, newRequirementsPeriod] = await Promise.all([
+    Room.countDocuments({ createdAt: { $gte: periodStart } }),
+    PG.countDocuments({ createdAt: { $gte: periodStart } }),
+    Requirement.countDocuments({ createdAt: { $gte: periodStart } }),
   ]);
 
   res.json({
     success: true,
     data: {
-      users: { total: totalUsers, thisMonth: newUsersThisMonth, thisWeek: newUsersThisWeek },
+      users: { total: totalUsers, thisMonth: newUsersThisMonth, thisWeek: newUsersThisWeek, periodNew: newUsersPeriod },
+      userTypeBreakdown,
       listings: {
         rooms: totalRooms, pgs: totalPGs, requirements: totalRequirements,
         total: totalRooms + totalPGs + totalRequirements,
         hidden: { rooms: hiddenRooms, pgs: hiddenPGs, requirements: hiddenRequirements },
+        periodNew: { rooms: newRoomsPeriod, pgs: newPGsPeriod, requirements: newRequirementsPeriod },
       },
       engagement: { conversations: totalConversations, messages: totalMessages, teams: totalTeams, unlocks: totalUnlocks },
-      revenue: { totalRecharges, totalRevenue: rechargeRevenue[0]?.total || 0 },
-      tickets: { open: openTickets, total: totalTickets },
-      charts: { dailySignups, dailyRevenue },
+      revenue: {
+        totalRecharges, totalRevenue: rechargeRevenue[0]?.total || 0,
+        periodRevenue: periodRevenue[0]?.total || 0, periodRecharges: periodRevenue[0]?.count || 0,
+      },
+      tickets: { open: openTickets, inProgress: inProgressTickets, resolved: resolvedTickets, total: totalTickets },
+      ticketsByCategory,
+      charts: { dailySignups, dailyRevenue, monthlySignups, monthlyRevenue },
+      recentUsers,
     },
   });
 }));
@@ -206,6 +273,19 @@ router.get('/listings', asyncHandler(async (req, res) => {
     Model.countDocuments(filter),
   ]);
   res.json({ success: true, data: items, pagination: { total, page: Number(page), pages: Math.ceil(total / Number(limit)) } });
+}));
+
+router.get('/listings/:type/:id', asyncHandler(async (req, res) => {
+  const { type, id } = req.params;
+  let Model, ownerField = 'postedBy';
+  if (type === 'room') Model = Room;
+  else if (type === 'pg') Model = PG;
+  else if (type === 'requirement') { Model = Requirement; ownerField = 'createdBy'; }
+  else return res.status(400).json({ success: false, message: 'Invalid type. Use room, pg, or requirement' });
+
+  const item = await Model.findById(id).populate(ownerField, 'name phone email profileImage city').lean();
+  if (!item) return res.status(404).json({ success: false, message: 'Listing not found' });
+  res.json({ success: true, data: item });
 }));
 
 router.put('/listings/:type/:id/toggle-hide', asyncHandler(async (req, res) => {
@@ -317,6 +397,158 @@ router.post('/tickets/:id/messages', asyncHandler(async (req, res) => {
 
   const populated = await TicketMessage.findById(msg._id).populate('sender', 'name profileImage').lean();
   res.json({ success: true, data: populated });
+}));
+
+// ═══════════════════════════════════════════
+// GUEST ACTIVITY
+// ═══════════════════════════════════════════
+
+router.get('/guests', asyncHandler(async (req, res) => {
+  const { page = 1, limit = 20, sort = '-lastSeenAt' } = req.query;
+  const skip = (Number(page) - 1) * Number(limit);
+  const [guests, total] = await Promise.all([
+    GuestActivity.find({ convertedToUser: null })
+      .sort(sort).skip(skip).limit(Number(limit)).lean(),
+    GuestActivity.countDocuments({ convertedToUser: null }),
+  ]);
+  res.json({ success: true, data: guests, pagination: { total, page: Number(page), pages: Math.ceil(total / Number(limit)) } });
+}));
+
+router.get('/guests/stats', asyncHandler(async (req, res) => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+
+  const [totalGuests, todayGuests, weekGuests, converted, topPages] = await Promise.all([
+    GuestActivity.countDocuments({ convertedToUser: null }),
+    GuestActivity.countDocuments({ lastSeenAt: { $gte: today }, convertedToUser: null }),
+    GuestActivity.countDocuments({ lastSeenAt: { $gte: sevenDaysAgo }, convertedToUser: null }),
+    GuestActivity.countDocuments({ convertedToUser: { $ne: null } }),
+    GuestActivity.aggregate([
+      { $match: { lastSeenAt: { $gte: thirtyDaysAgo } } },
+      { $unwind: '$pages' },
+      { $group: { _id: '$pages.path', visits: { $sum: 1 } } },
+      { $sort: { visits: -1 } },
+      { $limit: 10 },
+    ]),
+  ]);
+
+  // Daily guest visits for last 30 days
+  const dailyGuests = await GuestActivity.aggregate([
+    { $match: { firstSeenAt: { $gte: thirtyDaysAgo } } },
+    { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$firstSeenAt' } }, count: { $sum: 1 } } },
+    { $sort: { _id: 1 } },
+  ]);
+
+  res.json({
+    success: true,
+    data: { totalGuests, todayGuests, weekGuests, converted, topPages, dailyGuests },
+  });
+}));
+
+router.get('/guests/:id', asyncHandler(async (req, res) => {
+  const guest = await GuestActivity.findById(req.params.id).lean();
+  if (!guest) return res.status(404).json({ success: false, message: 'Guest not found' });
+  res.json({ success: true, data: guest });
+}));
+
+// ═══════════════════════════════════════════
+// API ACTIVITY
+// ═══════════════════════════════════════════
+
+router.get('/api-logs', asyncHandler(async (req, res) => {
+  const { page = 1, limit = 50, method, path, status } = req.query;
+  const filter = {};
+  if (method) filter.method = method.toUpperCase();
+  if (path) filter.path = new RegExp(path, 'i');
+  if (status) filter.statusCode = Number(status);
+
+  const skip = (Number(page) - 1) * Number(limit);
+  const [logs, total] = await Promise.all([
+    ApiLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean(),
+    ApiLog.countDocuments(filter),
+  ]);
+  res.json({ success: true, data: logs, pagination: { total, page: Number(page), pages: Math.ceil(total / Number(limit)) } });
+}));
+
+router.get('/api-logs/stats', asyncHandler(async (req, res) => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+
+  const [totalToday, totalWeek, errorCount, topEndpoints, avgResponseTime, hourlyTraffic] = await Promise.all([
+    ApiLog.countDocuments({ createdAt: { $gte: today } }),
+    ApiLog.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
+    ApiLog.countDocuments({ createdAt: { $gte: today }, statusCode: { $gte: 400 } }),
+    ApiLog.aggregate([
+      { $match: { createdAt: { $gte: sevenDaysAgo } } },
+      { $group: { _id: { method: '$method', path: '$path' }, count: { $sum: 1 }, avgTime: { $avg: '$responseTime' } } },
+      { $sort: { count: -1 } },
+      { $limit: 15 },
+    ]),
+    ApiLog.aggregate([
+      { $match: { createdAt: { $gte: today } } },
+      { $group: { _id: null, avg: { $avg: '$responseTime' } } },
+    ]),
+    ApiLog.aggregate([
+      { $match: { createdAt: { $gte: today } } },
+      { $group: { _id: { $hour: '$createdAt' }, count: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+    ]),
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      totalToday,
+      totalWeek,
+      errorCount,
+      topEndpoints,
+      avgResponseTime: avgResponseTime[0]?.avg || 0,
+      hourlyTraffic,
+    },
+  });
+}));
+
+// ═══════════════════════════════════════════
+// DB STORAGE
+// ═══════════════════════════════════════════
+
+router.get('/db-stats', asyncHandler(async (req, res) => {
+  const db = mongoose.connection.db;
+  const dbStats = await db.stats();
+
+  const collections = await db.listCollections().toArray();
+  const collectionStats = await Promise.all(
+    collections.map(async (col) => {
+      const stats = await db.collection(col.name).stats();
+      return {
+        name: col.name,
+        count: stats.count,
+        size: stats.size,
+        avgObjSize: stats.avgObjSize || 0,
+        storageSize: stats.storageSize,
+        indexes: stats.nindexes,
+        indexSize: stats.totalIndexSize,
+      };
+    })
+  );
+
+  collectionStats.sort((a, b) => b.size - a.size);
+
+  res.json({
+    success: true,
+    data: {
+      dbName: dbStats.db,
+      dataSize: dbStats.dataSize,
+      storageSize: dbStats.storageSize,
+      indexSize: dbStats.indexSize,
+      collections: dbStats.collections,
+      totalDocuments: dbStats.objects,
+      collectionStats,
+    },
+  });
 }));
 
 module.exports = router;
