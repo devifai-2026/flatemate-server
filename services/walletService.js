@@ -9,12 +9,13 @@ const Requirement = require('../models/Requirement');
 const Conversation = require('../models/Conversation');
 const AppError = require('../utils/AppError');
 
+const RAZORPAY_KEY_ID = 'rzp_test_SG44kbdRqtUqN8';
+const RAZORPAY_KEY_SECRET = 'YszgCu5szeYBnilryqE6mBGR';
+
 function getRazorpay() {
-  // Create fresh instance each time to avoid stale credentials
-  console.log('[WALLET] Razorpay init — key_id:', process.env.RAZORPAY_KEY_ID, 'key_secret:', process.env.RAZORPAY_KEY_SECRET ? process.env.RAZORPAY_KEY_SECRET.slice(0, 6) + '...' : 'MISSING');
   return new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET,
+    key_id: RAZORPAY_KEY_ID,
+    key_secret: RAZORPAY_KEY_SECRET,
   });
 }
 
@@ -67,7 +68,7 @@ const createRechargeOrder = async (userId) => {
     amount: RECHARGE_AMOUNT_PAISE,
     currency: 'INR',
     tokens: RECHARGE_TOKENS,
-    keyId: process.env.RAZORPAY_KEY_ID,
+    keyId: RAZORPAY_KEY_ID,
   };
 };
 
@@ -76,7 +77,7 @@ const createRechargeOrder = async (userId) => {
  */
 const verifyRecharge = async (userId, { razorpayOrderId, razorpayPaymentId, razorpaySignature }) => {
   const expectedSig = crypto
-    .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+    .createHmac('sha256', RAZORPAY_KEY_SECRET)
     .update(`${razorpayOrderId}|${razorpayPaymentId}`)
     .digest('hex');
 
