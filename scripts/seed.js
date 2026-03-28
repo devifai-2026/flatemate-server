@@ -9,7 +9,8 @@
  *   - All wallets at 0 tokens
  */
 
-require('dotenv').config();
+const env = process.env.NODE_ENV || 'development';
+require('dotenv').config({ path: `.env.${env}` });
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const Room = require('../models/Room');
