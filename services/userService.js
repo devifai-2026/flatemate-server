@@ -30,18 +30,22 @@ const updateProfile = async (userId, data) => {
   const user = await User.findById(userId);
   if (!user) throw new AppError('User not found', 404);
 
-  // Name can only be edited once
-  if ((data.firstName || data.surname) && user.nameEdited) {
+  // Check if name is actually changing
+  const nameChanging = (data.firstName && data.firstName !== user.firstName) || (data.surname && data.surname !== user.surname);
+
+  if (nameChanging && user.nameEdited) {
     throw new AppError('Name can only be edited once', 400);
   }
 
-  const allowed = ['firstName', 'surname', 'profileImage', 'age', 'gender', 'occupation', 'bio', 'city', 'email'];
+  const allowed = ['profileImage', 'age', 'gender', 'occupation', 'bio', 'city', 'email'];
   for (const key of allowed) {
     if (data[key] !== undefined) user[key] = data[key];
   }
 
-  // Auto-generate full name from firstName + surname
-  if (data.firstName || data.surname) {
+  // Only update name fields if they're actually changing
+  if (nameChanging) {
+    user.firstName = data.firstName;
+    user.surname = data.surname || '';
     user.name = [user.firstName, user.surname].filter(Boolean).join(' ');
     user.nameEdited = true;
   }
