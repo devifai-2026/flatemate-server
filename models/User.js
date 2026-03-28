@@ -4,10 +4,24 @@ const crypto = require('crypto');
 
 const userSchema = new mongoose.Schema(
   {
+    firstName: {
+      type: String,
+      trim: true,
+      maxlength: 50,
+    },
+    surname: {
+      type: String,
+      trim: true,
+      maxlength: 50,
+    },
     name: {
       type: String,
       trim: true,
       maxlength: 100,
+    },
+    nameEdited: {
+      type: Boolean,
+      default: false,
     },
     email: {
       type: String,

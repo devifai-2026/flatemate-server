@@ -4,7 +4,7 @@ const AppError = require('../utils/AppError');
 /**
  * Onboarding Step 1: Set user type, gender, city, profile image/avatar.
  */
-const completeStep1 = async (userId, { userType, gender, city, profileImage }) => {
+const completeStep1 = async (userId, { userType, gender, city, profileImage, firstName, surname, age }) => {
   const user = await User.findById(userId);
   if (!user) throw new AppError('User not found', 404);
 
@@ -12,6 +12,13 @@ const completeStep1 = async (userId, { userType, gender, city, profileImage }) =
   if (gender) user.gender = gender;
   if (city) user.city = city;
   if (profileImage) user.profileImage = profileImage;
+  if (firstName) {
+    user.firstName = firstName;
+    user.surname = surname || '';
+    user.name = [firstName, surname].filter(Boolean).join(' ');
+    user.nameEdited = true;
+  }
+  if (age) user.age = age;
 
   await user.save();
   return user;

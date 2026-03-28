@@ -22,6 +22,7 @@ const pgRoutes = require('./routes/pgRoutes');
 const wishlistRoutes = require('./routes/wishlistRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const walletRoutes = require('./routes/walletRoutes');
+const listingRoutes = require('./routes/listingRoutes');
 
 const app = express();
 
@@ -55,6 +56,7 @@ app.use('/api/pgs', pgRoutes);
 app.use('/api/wishlist', wishlistRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/listings', listingRoutes);
 
 // Root route
 app.get('/', (req, res) => {

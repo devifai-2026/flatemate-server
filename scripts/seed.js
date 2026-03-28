@@ -32,7 +32,7 @@ const MONGO_URI = process.env.MONGO_URI;
 const listers = [
   {
     phone: '9876543210',
-    name: 'Arjun Mehta',
+    firstName: 'Arjun', surname: 'Mehta', name: 'Arjun Mehta', nameEdited: true,
     gender: 'male',
     city: 'Mumbai',
     userType: 'flat-owner',
@@ -52,7 +52,7 @@ const listers = [
   },
   {
     phone: '9876543211',
-    name: 'Kavitha Reddy',
+    firstName: 'Kavitha', surname: 'Reddy', name: 'Kavitha Reddy', nameEdited: true,
     gender: 'female',
     city: 'Bangalore',
     userType: 'pg-owner',
@@ -72,7 +72,7 @@ const listers = [
   },
   {
     phone: '9876543212',
-    name: 'Rohit Kapoor',
+    firstName: 'Rohit', surname: 'Kapoor', name: 'Rohit Kapoor', nameEdited: true,
     gender: 'male',
     city: 'Delhi',
     userType: 'flat-owner',
@@ -96,7 +96,7 @@ const listers = [
 const seekers = [
   {
     phone: '9123456789',
-    name: 'Priya Sharma',
+    firstName: 'Priya', surname: 'Sharma', name: 'Priya Sharma', nameEdited: true,
     gender: 'female',
     city: 'Bangalore',
     userType: 'seeker',
@@ -116,7 +116,7 @@ const seekers = [
   },
   {
     phone: '9123456790',
-    name: 'Rahul Verma',
+    firstName: 'Rahul', surname: 'Verma', name: 'Rahul Verma', nameEdited: true,
     gender: 'male',
     city: 'Mumbai',
     userType: 'seeker',
@@ -136,7 +136,7 @@ const seekers = [
   },
   {
     phone: '9123456791',
-    name: 'Sneha Patel',
+    firstName: 'Sneha', surname: 'Patel', name: 'Sneha Patel', nameEdited: true,
     gender: 'female',
     city: 'Bangalore',
     userType: 'seeker',
@@ -156,7 +156,7 @@ const seekers = [
   },
   {
     phone: '9123456792',
-    name: 'Amit Singh',
+    firstName: 'Amit', surname: 'Singh', name: 'Amit Singh', nameEdited: true,
     gender: 'male',
     city: 'Delhi',
     userType: 'seeker',
@@ -176,7 +176,7 @@ const seekers = [
   },
   {
     phone: '9123456793',
-    name: 'Nisha Gupta',
+    firstName: 'Nisha', surname: 'Gupta', name: 'Nisha Gupta', nameEdited: true,
     gender: 'female',
     city: 'Mumbai',
     userType: 'seeker',
