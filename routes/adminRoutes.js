@@ -272,7 +272,18 @@ router.get('/users/:id', asyncHandler(async (req, res) => {
     Conversation.find({ participants: req.params.id }).populate('participants', 'name phone profileImage').sort({ updatedAt: -1 }).limit(20).lean(),
   ]);
 
-  res.json({ success: true, data: { user, rooms, pgs, requirements, wishlist, teams, transactions, conversations } });
+  // Populate wishlist items with actual listing data
+  const populatedWishlist = await Promise.all(
+    wishlist.map(async (w) => {
+      let listing = null;
+      if (w.itemType === 'room') listing = await Room.findById(w.itemId).select('title location rent images roomType').lean();
+      else if (w.itemType === 'pg') listing = await PG.findById(w.itemId).select('title location rent images gender sharing').lean();
+      else if (w.itemType === 'requirement') listing = await Requirement.findById(w.itemId).select('title location budget images createdBy').populate('createdBy', 'name profileImage').lean();
+      return { ...w, listing };
+    })
+  );
+
+  res.json({ success: true, data: { user, rooms, pgs, requirements, wishlist: populatedWishlist, teams, transactions, conversations } });
 }));
 
 router.put('/users/:id/block', asyncHandler(async (req, res) => {
