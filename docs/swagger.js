@@ -471,6 +471,338 @@ const swaggerDefinition = {
         responses: { 201: { description: 'Created' } },
       },
     },
+
+    // ══════════════════════════════════════════
+    // ADMIN AUTH
+    // ══════════════════════════════════════════
+
+    '/api/admin/login': {
+      post: {
+        tags: ['Admin Auth'], summary: 'Admin login (email + password)',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['email', 'password'], properties: { email: { type: 'string', format: 'email', example: 'admin@flatmate.com' }, password: { type: 'string', example: 'Admin@123' } } } } } },
+        responses: { 200: { description: 'Login successful — returns JWT token and user' }, 401: { description: 'Invalid email or password' }, 403: { description: 'Not an admin' } },
+      },
+    },
+    '/api/admin/register': {
+      post: {
+        tags: ['Admin Auth'], summary: 'Register a new admin',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['name', 'email', 'password'], properties: { name: { type: 'string', example: 'Super Admin' }, email: { type: 'string', format: 'email', example: 'admin@flatmate.com' }, password: { type: 'string', example: 'Admin@123' } } } } } },
+        responses: { 201: { description: 'Admin created' }, 409: { description: 'Email already registered' } },
+      },
+    },
+
+    // ══════════════════════════════════════════
+    // ADMIN — ANALYTICS
+    // ══════════════════════════════════════════
+
+    '/api/admin/analytics': {
+      get: {
+        tags: ['Admin'], summary: 'Dashboard analytics', security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'period', in: 'query', schema: { type: 'string', enum: ['1m', '3m', '6m', 'year'] }, description: 'Time period (default 1m)' }],
+        responses: { 200: { description: 'Analytics data — users, listings, revenue, engagement, charts' } },
+      },
+    },
+
+    // ══════════════════════════════════════════
+    // ADMIN — USERS
+    // ══════════════════════════════════════════
+
+    '/api/admin/users': {
+      get: {
+        tags: ['Admin Users'], summary: 'List all users (paginated)', security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+          { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Search by name, phone, or email' },
+          { name: 'sort', in: 'query', schema: { type: 'string', default: '-createdAt' } },
+        ],
+        responses: { 200: { description: 'Paginated user list' } },
+      },
+    },
+    '/api/admin/users/{id}': {
+      get: {
+        tags: ['Admin Users'], summary: 'Get user detail with listings, wishlist, teams, transactions, conversations', security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Full user detail with populated wishlist' }, 404: { description: 'User not found' } },
+      },
+    },
+    '/api/admin/users/{id}/block': {
+      put: {
+        tags: ['Admin Users'], summary: 'Block a user (cannot block self or other admins)', security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'User blocked' }, 400: { description: 'Cannot block yourself' }, 403: { description: 'Cannot block an admin' } },
+      },
+    },
+    '/api/admin/users/{id}/unblock': {
+      put: {
+        tags: ['Admin Users'], summary: 'Unblock a user', security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'User unblocked' } },
+      },
+    },
+
+    // ══════════════════════════════════════════
+    // ADMIN — TRANSACTIONS
+    // ══════════════════════════════════════════
+
+    '/api/admin/transactions': {
+      get: {
+        tags: ['Admin Transactions'], summary: 'List all transactions (paginated, filterable)', security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+          { name: 'type', in: 'query', schema: { type: 'string', enum: ['recharge', 'debit'] } },
+          { name: 'paymentStatus', in: 'query', schema: { type: 'string', enum: ['paid', 'failed', 'pending'] } },
+          { name: 'from', in: 'query', schema: { type: 'string', format: 'date' }, description: 'Start date (YYYY-MM-DD)' },
+          { name: 'to', in: 'query', schema: { type: 'string', format: 'date' }, description: 'End date (YYYY-MM-DD)' },
+          { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Search by user name/phone/email' },
+        ],
+        responses: { 200: { description: 'Paginated transaction list with populated user profiles' } },
+      },
+    },
+    '/api/admin/transactions/stats': {
+      get: {
+        tags: ['Admin Transactions'], summary: 'Transaction summary stats', security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'from', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'to', in: 'query', schema: { type: 'string', format: 'date' } },
+        ],
+        responses: { 200: { description: 'Recharge/debit totals, payment status counts' } },
+      },
+    },
+
+    // ══════════════════════════════════════════
+    // ADMIN — LISTINGS
+    // ══════════════════════════════════════════
+
+    '/api/admin/listings': {
+      get: {
+        tags: ['Admin Listings'], summary: 'List listings by type (paginated)', security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'type', in: 'query', schema: { type: 'string', enum: ['room', 'pg', 'requirement'], default: 'room' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+          { name: 'hidden', in: 'query', schema: { type: 'string', enum: ['true', 'false'] } },
+          { name: 'search', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Paginated listings' } },
+      },
+    },
+    '/api/admin/listings/counts': {
+      get: { tags: ['Admin Listings'], summary: 'Get listing counts by type', security: [{ BearerAuth: [] }], responses: { 200: { description: 'Room, PG, requirement counts' } } },
+    },
+    '/api/admin/listings/{type}/{id}': {
+      get: {
+        tags: ['Admin Listings'], summary: 'Get single listing detail', security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'type', in: 'path', required: true, schema: { type: 'string', enum: ['room', 'pg', 'requirement'] } },
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Listing detail with owner populated' }, 404: { description: 'Not found' } },
+      },
+    },
+    '/api/admin/listings/{type}/{id}/toggle-hide': {
+      put: {
+        tags: ['Admin Listings'], summary: 'Toggle listing visibility (hide/show)', security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'type', in: 'path', required: true, schema: { type: 'string', enum: ['room', 'pg', 'requirement'] } },
+          { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Listing visibility toggled' } },
+      },
+    },
+
+    // ══════════════════════════════════════════
+    // ADMIN — CHATS
+    // ══════════════════════════════════════════
+
+    '/api/admin/chats': {
+      get: {
+        tags: ['Admin Chats'], summary: 'List all conversations (paginated)', security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        ],
+        responses: { 200: { description: 'Paginated conversations with participants' } },
+      },
+    },
+    '/api/admin/chats/{conversationId}/messages': {
+      get: {
+        tags: ['Admin Chats'], summary: 'Get messages for a conversation', security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'conversationId', in: 'path', required: true, schema: { type: 'string' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } },
+        ],
+        responses: { 200: { description: 'Paginated messages' } },
+      },
+    },
+
+    // ══════════════════════════════════════════
+    // ADMIN — TICKETS
+    // ══════════════════════════════════════════
+
+    '/api/admin/tickets/badge-count': {
+      get: {
+        tags: ['Admin Tickets'], summary: 'Get open + in-progress ticket count (for badge)', security: [{ BearerAuth: [] }],
+        responses: { 200: { description: '{ count: number }' } },
+      },
+    },
+    '/api/admin/tickets': {
+      get: {
+        tags: ['Admin Tickets'], summary: 'List all tickets (paginated, filterable)', security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+          { name: 'status', in: 'query', schema: { type: 'string', enum: ['open', 'in-progress', 'resolved', 'closed'] } },
+          { name: 'priority', in: 'query', schema: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] } },
+          { name: 'category', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Paginated tickets with user populated' } },
+      },
+    },
+    '/api/admin/tickets/{id}': {
+      get: {
+        tags: ['Admin Tickets'], summary: 'Get ticket detail with messages', security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Ticket + messages' }, 404: { description: 'Ticket not found' } },
+      },
+    },
+    '/api/admin/tickets/{id}/status': {
+      put: {
+        tags: ['Admin Tickets'], summary: 'Update ticket status (emits socket event)', security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', properties: { status: { type: 'string', enum: ['open', 'in-progress', 'resolved', 'closed'] } } } } } },
+        responses: { 200: { description: 'Status updated' } },
+      },
+    },
+    '/api/admin/tickets/{id}/messages': {
+      post: {
+        tags: ['Admin Tickets'], summary: 'Send admin reply on ticket (emits socket event)', security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['text'], properties: { text: { type: 'string' } } } } } },
+        responses: { 200: { description: 'Message sent' } },
+      },
+    },
+
+    // ══════════════════════════════════════════
+    // ADMIN — GUEST ACTIVITY
+    // ══════════════════════════════════════════
+
+    '/api/admin/guests': {
+      get: {
+        tags: ['Admin Guests'], summary: 'List guest visitors (non-converted, paginated)', security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+          { name: 'sort', in: 'query', schema: { type: 'string', default: '-lastSeenAt' } },
+        ],
+        responses: { 200: { description: 'Paginated guest visitors' } },
+      },
+    },
+    '/api/admin/guests/stats': {
+      get: {
+        tags: ['Admin Guests'], summary: 'Guest activity stats — totals, top pages, daily chart', security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'Guest stats with totalGuests, todayGuests, weekGuests, converted, topPages, dailyGuests' } },
+      },
+    },
+    '/api/admin/guests/{id}': {
+      get: {
+        tags: ['Admin Guests'], summary: 'Get single guest detail with page visit timeline', security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Guest detail' }, 404: { description: 'Guest not found' } },
+      },
+    },
+
+    // ══════════════════════════════════════════
+    // ADMIN — API LOGS
+    // ══════════════════════════════════════════
+
+    '/api/admin/api-logs': {
+      get: {
+        tags: ['Admin API Logs'], summary: 'List API request logs (paginated, filterable)', security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } },
+          { name: 'method', in: 'query', schema: { type: 'string', enum: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'] } },
+          { name: 'path', in: 'query', schema: { type: 'string' }, description: 'Filter by path (regex)' },
+          { name: 'status', in: 'query', schema: { type: 'integer' }, description: 'Filter by status code' },
+        ],
+        responses: { 200: { description: 'Paginated API logs' } },
+      },
+    },
+    '/api/admin/api-logs/stats': {
+      get: {
+        tags: ['Admin API Logs'], summary: 'API activity stats — today/week totals, errors, top endpoints, hourly traffic', security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'API stats with totalToday, totalWeek, errorCount, topEndpoints, avgResponseTime, hourlyTraffic' } },
+      },
+    },
+
+    // ══════════════════════════════════════════
+    // ADMIN — DB STORAGE
+    // ══════════════════════════════════════════
+
+    '/api/admin/db-stats': {
+      get: {
+        tags: ['Admin DB'], summary: 'Database storage stats — sizes, collection breakdown', security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'DB stats with dataSize, storageSize, indexSize, per-collection stats' } },
+      },
+    },
+
+    // ══════════════════════════════════════════
+    // GUEST TRACKING (public)
+    // ══════════════════════════════════════════
+
+    '/api/guest/track': {
+      post: {
+        tags: ['Guest'], summary: 'Track guest page visit (called by frontend for non-logged-in users)',
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['fingerprint', 'page'], properties: {
+          fingerprint: { type: 'string', example: 'gfp_abc123_42' },
+          page: { type: 'object', properties: { path: { type: 'string', example: '/rooms/123' }, title: { type: 'string', example: 'Room Details' }, duration: { type: 'integer', example: 15 } } },
+          device: { type: 'object', properties: { type: { type: 'string', enum: ['mobile', 'desktop', 'tablet'] }, os: { type: 'string' }, browser: { type: 'string' } } },
+          referrer: { type: 'string' },
+          city: { type: 'string' },
+          country: { type: 'string' },
+        } } } } },
+        responses: { 200: { description: 'Tracked — returns guest ID' }, 400: { description: 'fingerprint and page.path required' } },
+      },
+    },
+
+    // ══════════════════════════════════════════
+    // TICKETS (user-side)
+    // ══════════════════════════════════════════
+
+    '/api/tickets': {
+      get: {
+        tags: ['Tickets'], summary: 'Get my tickets', security: [{ BearerAuth: [] }],
+        responses: { 200: { description: 'List of user tickets' } },
+      },
+      post: {
+        tags: ['Tickets'], summary: 'Create a support ticket (emits socket to admin-room)', security: [{ BearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['subject', 'description'], properties: {
+          subject: { type: 'string', example: 'Payment not reflected' },
+          description: { type: 'string', example: 'I recharged ₹500 but wallet still shows 0' },
+          category: { type: 'string' },
+          priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
+        } } } } },
+        responses: { 201: { description: 'Ticket created' } },
+      },
+    },
+    '/api/tickets/{id}': {
+      get: {
+        tags: ['Tickets'], summary: 'Get ticket detail with messages', security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Ticket + messages' } },
+      },
+    },
+    '/api/tickets/{id}/messages': {
+      post: {
+        tags: ['Tickets'], summary: 'Send message on ticket (emits socket to admin-room)', security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['text'], properties: { text: { type: 'string' } } } } } },
+        responses: { 200: { description: 'Message sent' } },
+      },
+    },
   },
 };
 

@@ -95,7 +95,7 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
     target: {
       namespace: 'android_app',
       package_name: 'in.justflatmate.app',
-      sha256_cert_fingerprints: [],
+      sha256_cert_fingerprints: ['7B:5C:AC:EC:7B:BB:34:03:27:2A:DF:49:C0:36:7A:13:A4:2B:67:49:B1:D9:B6:51:55:9C:DF:81:02:A6:14:F4'],
     },
   }]);
 });
