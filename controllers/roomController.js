@@ -4,6 +4,8 @@ const roomService = require('../services/roomService');
 /** POST /api/rooms */
 const createRoom = asyncHandler(async (req, res) => {
   const room = await roomService.create(req.body, req.user.id);
+  const io = req.app.get('io');
+  if (io) io.to('admin-room').emit('new-pending-listing', { type: 'room', listing: room });
   res.status(201).json({ success: true, data: room });
 });
 

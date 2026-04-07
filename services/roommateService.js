@@ -23,7 +23,7 @@ const getAll = async (query) => {
     limit = 10,
   } = query;
 
-  const filter = {};
+  const filter = { status: 'approved' };
 
   if (location) filter.preferredLocation = new RegExp(location, 'i');
   if (minBudget) filter['budget.max'] = { $gte: Number(minBudget) };

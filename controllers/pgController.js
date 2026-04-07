@@ -3,6 +3,8 @@ const pgService = require('../services/pgService');
 
 const createPG = asyncHandler(async (req, res) => {
   const pg = await pgService.create(req.body, req.user.id);
+  const io = req.app.get('io');
+  if (io) io.to('admin-room').emit('new-pending-listing', { type: 'pg', listing: pg });
   res.status(201).json({ success: true, data: pg });
 });
 

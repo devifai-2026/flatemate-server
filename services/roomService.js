@@ -18,7 +18,7 @@ const getAll = async (query) => {
     page = 1, limit = 10,
   } = query;
 
-  const filter = { isHidden: { $ne: true } };
+  const filter = { isHidden: { $ne: true }, status: 'approved' };
 
   if (location) filter.location = new RegExp(location, 'i');
   if (minRent || maxRent) {

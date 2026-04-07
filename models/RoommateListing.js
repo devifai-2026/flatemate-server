@@ -50,6 +50,12 @@ const roommateListingSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
+    },
+    rejectionReason: { type: String, trim: true },
   },
   { timestamps: true }
 );

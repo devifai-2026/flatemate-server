@@ -4,6 +4,8 @@ const requirementService = require('../services/requirementService');
 /** POST /api/requirements */
 const createRequirement = asyncHandler(async (req, res) => {
   const requirement = await requirementService.create(req.body, req.user.id);
+  const io = req.app.get('io');
+  if (io) io.to('admin-room').emit('new-pending-listing', { type: 'requirement', listing: requirement });
   res.status(201).json({ success: true, data: requirement });
 });
 

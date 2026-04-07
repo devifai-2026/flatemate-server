@@ -119,6 +119,12 @@ const requirementSchema = new mongoose.Schema(
     },
     isActive: { type: Boolean, default: true },
     isHidden: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
+    },
+    rejectionReason: { type: String, trim: true },
 
     // ── Phone visibility ──
     phoneVisibility: {

@@ -4,6 +4,8 @@ const roommateService = require('../services/roommateService');
 /** POST /api/roommates */
 const createListing = asyncHandler(async (req, res) => {
   const listing = await roommateService.create(req.body, req.user.id);
+  const io = req.app.get('io');
+  if (io) io.to('admin-room').emit('new-pending-listing', { type: 'roommate', listing });
   res.status(201).json({ success: true, data: listing });
 });
 

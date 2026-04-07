@@ -70,6 +70,12 @@ const roomSchema = new mongoose.Schema(
     },
 
     isHidden: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
+    },
+    rejectionReason: { type: String, trim: true },
 
     // ── Phone visibility ──
     phoneVisibility: {

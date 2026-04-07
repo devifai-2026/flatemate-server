@@ -8,6 +8,7 @@ const User = require('../models/User');
 const Room = require('../models/Room');
 const PG = require('../models/PG');
 const Requirement = require('../models/Requirement');
+const RoommateListing = require('../models/RoommateListing');
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const WalletTransaction = require('../models/WalletTransaction');
@@ -790,6 +791,135 @@ router.get('/db-stats', asyncHandler(async (req, res) => {
       totalDocuments: dbStats.objects,
       collectionStats,
     },
+  });
+}));
+
+// ═══════════════════════════════════════════
+// APPROVALS
+// ═══════════════════════════════════════════
+
+const APPROVAL_MODELS = {
+  room: { Model: Room, ownerField: 'postedBy' },
+  pg: { Model: PG, ownerField: 'postedBy' },
+  roommate: { Model: RoommateListing, ownerField: 'user' },
+  requirement: { Model: Requirement, ownerField: 'createdBy' },
+};
+
+// GET /admin/approvals/badge-count
+router.get('/approvals/badge-count', asyncHandler(async (req, res) => {
+  const [rooms, pgs, roommates, requirements] = await Promise.all([
+    Room.countDocuments({ status: 'pending' }),
+    PG.countDocuments({ status: 'pending' }),
+    RoommateListing.countDocuments({ status: 'pending' }),
+    Requirement.countDocuments({ status: 'pending' }),
+  ]);
+  const count = rooms + pgs + roommates + requirements;
+  res.json({ success: true, data: { count, rooms, pgs, roommates, requirements } });
+}));
+
+// GET /admin/approvals?type=room|pg|roommate|requirement&status=pending
+router.get('/approvals', asyncHandler(async (req, res) => {
+  const { type, status = 'pending', page = 1, limit = 20 } = req.query;
+  const skip = (Number(page) - 1) * Number(limit);
+
+  const fetchOne = async (key) => {
+    const { Model, ownerField } = APPROVAL_MODELS[key];
+    const filter = status === 'all' ? {} : { status };
+    const [items, total] = await Promise.all([
+      Model.find(filter)
+        .populate(ownerField, 'name phone email profileImage')
+        .sort({ createdAt: -1 })
+        .skip(type ? skip : 0)
+        .limit(type ? Number(limit) : 50)
+        .lean(),
+      Model.countDocuments(filter),
+    ]);
+    return { items: items.map(i => ({ ...i, listingType: key })), total };
+  };
+
+  if (type && APPROVAL_MODELS[type]) {
+    const { items, total } = await fetchOne(type);
+    return res.json({ success: true, data: items, pagination: { total, page: Number(page), pages: Math.ceil(total / Number(limit)) } });
+  }
+
+  // All types combined
+  const [r, p, rm, req_] = await Promise.all([
+    fetchOne('room'), fetchOne('pg'), fetchOne('roommate'), fetchOne('requirement'),
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      rooms: r.items, roomsTotal: r.total,
+      pgs: p.items, pgsTotal: p.total,
+      roommates: rm.items, roommatesTotal: rm.total,
+      requirements: req_.items, requirementsTotal: req_.total,
+    },
+  });
+}));
+
+// POST /admin/approvals/:type/:id/approve
+router.post('/approvals/:type/:id/approve', asyncHandler(async (req, res) => {
+  const { type, id } = req.params;
+  const entry = APPROVAL_MODELS[type];
+  if (!entry) return res.status(400).json({ success: false, message: 'Invalid type' });
+
+  const item = await entry.Model.findById(id);
+  if (!item) return res.status(404).json({ success: false, message: 'Listing not found' });
+
+  item.status = 'approved';
+  item.rejectionReason = undefined;
+  await item.save();
+
+  // Notify owner via socket
+  const io = req.app.get('io');
+  const ownerId = item[entry.ownerField]?.toString();
+  if (io && ownerId) {
+    io.to(`user:${ownerId}`).emit('listing-approved', { listingId: id, type, title: item.title });
+  }
+
+  res.json({ success: true, data: item, message: 'Listing approved' });
+}));
+
+// POST /admin/approvals/:type/:id/reject
+router.post('/approvals/:type/:id/reject', asyncHandler(async (req, res) => {
+  const { type, id } = req.params;
+  const { reason } = req.body;
+
+  if (!reason?.trim()) return res.status(400).json({ success: false, message: 'Rejection reason is required' });
+
+  const entry = APPROVAL_MODELS[type];
+  if (!entry) return res.status(400).json({ success: false, message: 'Invalid type' });
+
+  const item = await entry.Model.findById(id);
+  if (!item) return res.status(404).json({ success: false, message: 'Listing not found' });
+
+  item.status = 'rejected';
+  item.rejectionReason = reason.trim();
+  await item.save();
+
+  // Notify owner via socket
+  const io = req.app.get('io');
+  const ownerId = item[entry.ownerField]?.toString();
+  if (io && ownerId) {
+    io.to(`user:${ownerId}`).emit('listing-rejected', { listingId: id, type, title: item.title, reason: reason.trim() });
+  }
+
+  res.json({ success: true, data: item, message: 'Listing rejected' });
+}));
+
+// POST /admin/approvals/migrate — mark all existing listings (no status field) as approved
+router.post('/approvals/migrate', asyncHandler(async (req, res) => {
+  const [r, p, rm, req_] = await Promise.all([
+    Room.updateMany({ status: { $exists: false } }, { $set: { status: 'approved' } }),
+    PG.updateMany({ status: { $exists: false } }, { $set: { status: 'approved' } }),
+    RoommateListing.updateMany({ status: { $exists: false } }, { $set: { status: 'approved' } }),
+    Requirement.updateMany({ status: { $exists: false } }, { $set: { status: 'approved' } }),
+  ]);
+  res.json({
+    success: true,
+    message: 'Migration complete — existing listings marked as approved',
+    data: { rooms: r.modifiedCount, pgs: p.modifiedCount, roommates: rm.modifiedCount, requirements: req_.modifiedCount },
   });
 }));
 
