@@ -11,48 +11,33 @@ const path = require('path');
 const app = express();
 
 // ─────────────────────────────────────────────
-// ✅ CORS CONFIG (IMPORTANT FIX)
+// ✅ FULL OPEN CORS (ALLOW EVERYTHING)
 // ─────────────────────────────────────────────
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'https://justflatmate.in',
-  'https://www.justflatmate.in',
-];
-
 app.use(cors({
-  origin: function (origin, callback) {
-    // allow requests with no origin (mobile apps, postman)
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    } else {
-      return callback(new Error('CORS not allowed for this origin: ' + origin));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  origin: true, // reflect request origin
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: '*',
 }));
 
-// ✅ Handle preflight requests explicitly
+// Explicit preflight handling
 app.options('*', cors());
 
 // ─────────────────────────────────────────────
-// 🔐 SECURITY + BASIC MIDDLEWARE
+// 🔐 SECURITY (RELAXED)
 // ─────────────────────────────────────────────
 app.set('trust proxy', 1);
 
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginEmbedderPolicy: false,
   })
 );
 
 app.use(express.json({ limit: '1mb' }));
 
-// Serve uploaded files
+// Static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Logging
@@ -60,11 +45,11 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
-// Custom API logger
+// Custom logger
 app.use(apiLogger);
 
 // ─────────────────────────────────────────────
-// 📄 SWAGGER DOCS
+// 📄 SWAGGER
 // ─────────────────────────────────────────────
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
@@ -93,7 +78,7 @@ app.use('/api/tickets', require('./routes/ticketRoutes'));
 app.use('/api/guest', require('./routes/guestRoutes'));
 
 // ─────────────────────────────────────────────
-// 🔗 DEEP LINK CONFIG
+// 🔗 DEEP LINK FILES
 // ─────────────────────────────────────────────
 app.get('/.well-known/apple-app-site-association', (req, res) => {
   res.json({
@@ -130,8 +115,6 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     name: 'FlatMate API',
-    version: '1.0.0',
-    env: process.env.NODE_ENV,
     status: 'running',
   });
 });
@@ -144,7 +127,7 @@ app.get('/health', (req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// ❌ ERROR HANDLER (LAST)
+// ❌ ERROR HANDLER
 // ─────────────────────────────────────────────
 app.use(errorHandler);
 
