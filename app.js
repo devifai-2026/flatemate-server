@@ -13,15 +13,27 @@ const app = express();
 // ─────────────────────────────────────────────
 // ✅ FULL OPEN CORS (ALLOW EVERYTHING)
 // ─────────────────────────────────────────────
-app.use(cors({
+const corsOptions = {
   origin: true, // reflect request origin
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: '*',
-}));
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'sec-ch-ua',
+    'sec-ch-ua-mobile',
+    'sec-ch-ua-platform',
+  ],
+  exposedHeaders: ['Authorization'],
+};
 
-// Explicit preflight handling
-app.options('*', cors());
+app.use(cors(corsOptions));
+
+// Explicit preflight handling (must use same options)
+app.options('*', cors(corsOptions));
 
 // ─────────────────────────────────────────────
 // 🔐 SECURITY (RELAXED)
