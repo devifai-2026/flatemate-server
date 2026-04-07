@@ -33,7 +33,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Explicit preflight handling (must use same options)
-app.options('*', cors(corsOptions));
+app.options('/*path', cors(corsOptions));
 
 // ─────────────────────────────────────────────
 // 🔐 SECURITY (RELAXED)
