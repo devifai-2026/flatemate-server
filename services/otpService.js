@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const BonusConfig = require('../models/BonusConfig');
+const WalletTransaction = require('../models/WalletTransaction');
 const AppError = require('../utils/AppError');
 
 const MESSAGECENTRAL_BASE = process.env.MESSAGECENTRAL_BASE_URL || 'https://cpaas.messagecentral.com';
@@ -158,11 +160,43 @@ const verifyOtp = async (phone, otpCode) => {
     }
   }
 
+  // Credit signup bonus on the first successful verification only.
+  const isFirstVerification = !user.phoneVerified;
+  let signupBonus = 0;
+
   // Mark phone as verified
   user.phoneVerified = true;
   user.verified = true;
   user.otp = undefined;
+
+  if (isFirstVerification) {
+    try {
+      const cfg = await BonusConfig.getSingleton();
+      if (cfg.signupBonus > 0) {
+        signupBonus = cfg.signupBonus;
+        user.walletBalance = (user.walletBalance || 0) + signupBonus;
+      }
+    } catch (e) {
+      console.error('[OTP] Failed to read BonusConfig:', e.message);
+    }
+  }
+
   await user.save();
+
+  if (signupBonus > 0) {
+    try {
+      await WalletTransaction.create({
+        user: user._id,
+        type: 'recharge',
+        amount: 0,
+        tokens: signupBonus,
+        description: `Signup bonus (${signupBonus} tokens)`,
+        paymentStatus: 'paid',
+      });
+    } catch (e) {
+      console.error('[OTP] Failed to log signup bonus transaction:', e.message);
+    }
+  }
 
   // Generate JWT
   const token = jwt.sign(
@@ -184,8 +218,10 @@ const verifyOtp = async (phone, otpCode) => {
       verified: user.verified,
       onboardingComplete: !!user.onboardingComplete,
       profileImage: user.profileImage,
+      walletBalance: user.walletBalance,
     },
     isNewUser,
+    signupBonus,
   };
 };
 

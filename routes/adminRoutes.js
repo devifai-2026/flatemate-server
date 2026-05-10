@@ -20,6 +20,7 @@ const TicketMessage = require('../models/TicketMessage');
 const Wishlist = require('../models/Wishlist');
 const GuestActivity = require('../models/GuestActivity');
 const ApiLog = require('../models/ApiLog');
+const BonusConfig = require('../models/BonusConfig');
 const mongoose = require('mongoose');
 
 const router = Router();
@@ -428,7 +429,7 @@ router.get('/transactions/stats', asyncHandler(async (req, res) => {
 // ═══════════════════════════════════════════
 
 router.get('/listings', asyncHandler(async (req, res) => {
-  const { type = 'room', page = 1, limit = 20, hidden, search } = req.query;
+  const { type = 'room', page = 1, limit = 20, hidden, search, location, pincode } = req.query;
   let Model = Room, ownerField = 'postedBy';
   if (type === 'pg') Model = PG;
   if (type === 'requirement') { Model = Requirement; ownerField = 'createdBy'; }
@@ -436,7 +437,69 @@ router.get('/listings', asyncHandler(async (req, res) => {
   const filter = {};
   if (hidden === 'true') filter.isHidden = true;
   if (hidden === 'false') filter.isHidden = { $ne: true };
-  if (search) filter.title = new RegExp(search, 'i');
+
+  // ── Search across title + location + city (PG only) ──
+  // The user's search comes from a Mapbox suggestion like
+  //   "411057, Mulshi, Maharashtra, India"
+  // but the stored location is a free-form string like
+  //   "Hinjewadi Phase 1 Rd ، 411057 Mulshi، India"
+  // Matching the entire query as one substring fails (commas, word order,
+  // "Maharashtra" missing). So we tokenize on commas/whitespace and require
+  // each token to match at least one of title/location/city (PG). A 6-digit
+  // token alone is enough to find the row by pincode.
+  const escape = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Tokens we drop from text matching — they're almost never present in the
+  // stored location string and would cause valid rows to be filtered out.
+  const STOPWORDS = new Set([
+    'india', 'and', 'the', 'of', 'in', 'na',
+    // Indian state / UT names, lowercased
+    'andhra', 'pradesh', 'arunachal', 'assam', 'bihar', 'chhattisgarh',
+    'goa', 'gujarat', 'haryana', 'himachal', 'jharkhand', 'karnataka',
+    'kerala', 'madhya', 'maharashtra', 'manipur', 'meghalaya', 'mizoram',
+    'nagaland', 'odisha', 'punjab', 'rajasthan', 'sikkim', 'tamil', 'nadu',
+    'telangana', 'tripura', 'uttar', 'uttarakhand', 'bengal', 'west',
+    'delhi', 'chandigarh', 'puducherry', 'lakshadweep', 'ladakh',
+  ]);
+
+  const tokenize = (text) =>
+    String(text)
+      .split(/[\s,،]+/)             // split on whitespace + ASCII/Arabic comma
+      .map((t) => t.trim())
+      .filter((t) => t.length >= 2 && !STOPWORDS.has(t.toLowerCase()));
+
+  // Pull any 6-digit pincode out of free-form text so it gets matched as a
+  // dedicated location filter, regardless of what other tokens are present.
+  const extractPincode = (text) => String(text).match(/\b\d{6}\b/)?.[0];
+
+  const andClauses = [];
+  const explicitPincode = pincode ? String(pincode).trim() : null;
+  let derivedPincode = null;
+
+  if (search) {
+    derivedPincode = extractPincode(search);
+    const tokens = tokenize(search).filter((t) => t !== derivedPincode);
+    for (const tok of tokens) {
+      const rx = new RegExp(escape(tok), 'i');
+      const fields = [{ title: rx }, { location: rx }];
+      if (type === 'pg') fields.push({ city: rx });
+      andClauses.push({ $or: fields });
+    }
+  }
+
+  if (location) {
+    if (!derivedPincode) derivedPincode = extractPincode(location);
+    const tokens = tokenize(location).filter((t) => t !== derivedPincode);
+    for (const tok of tokens) {
+      andClauses.push({ location: new RegExp(escape(tok), 'i') });
+    }
+  }
+
+  const finalPincode = explicitPincode || derivedPincode;
+  if (finalPincode) {
+    andClauses.push({ location: new RegExp(escape(finalPincode)) });
+  }
+
+  if (andClauses.length) filter.$and = andClauses;
 
   const skip = (Number(page) - 1) * Number(limit);
   const [items, total] = await Promise.all([
@@ -920,6 +983,79 @@ router.post('/approvals/migrate', asyncHandler(async (req, res) => {
     success: true,
     message: 'Migration complete — existing listings marked as approved',
     data: { rooms: r.modifiedCount, pgs: p.modifiedCount, roommates: rm.modifiedCount, requirements: req_.modifiedCount },
+  });
+}));
+
+// ═══════════════════════════════════════════
+// BONUS GIFTING (signup bonus + bulk credit existing users)
+// ═══════════════════════════════════════════
+
+router.get('/bonus-config', asyncHandler(async (req, res) => {
+  const cfg = await BonusConfig.getSingleton();
+  res.json({ success: true, data: cfg });
+}));
+
+router.put('/bonus-config', asyncHandler(async (req, res) => {
+  const { signupBonus, existingUserBonus } = req.body;
+  const cfg = await BonusConfig.getSingleton();
+
+  if (signupBonus !== undefined) {
+    const n = Number(signupBonus);
+    if (!Number.isFinite(n) || n < 0) throw new AppError('signupBonus must be a non-negative number', 400);
+    cfg.signupBonus = n;
+  }
+  if (existingUserBonus !== undefined) {
+    const n = Number(existingUserBonus);
+    if (!Number.isFinite(n) || n < 0) throw new AppError('existingUserBonus must be a non-negative number', 400);
+    cfg.existingUserBonus = n;
+  }
+  cfg.updatedBy = req.user.id;
+  await cfg.save();
+
+  res.json({ success: true, data: cfg, message: 'Bonus config updated' });
+}));
+
+// Credit the configured existingUserBonus (or an override amount) to every
+// non-admin, non-blocked user. Each user gets one WalletTransaction so the
+// credit shows up in their transaction history.
+router.post('/bonus-config/credit-existing', asyncHandler(async (req, res) => {
+  const cfg = await BonusConfig.getSingleton();
+  const requested = req.body?.amount !== undefined ? Number(req.body.amount) : cfg.existingUserBonus;
+  if (!Number.isFinite(requested) || requested <= 0) {
+    throw new AppError('Amount must be a positive number', 400);
+  }
+
+  const targets = await User.find({ isAdmin: { $ne: true }, isBlocked: { $ne: true } }).select('_id walletBalance').lean();
+  if (targets.length === 0) {
+    return res.json({ success: true, data: { creditedCount: 0, amount: requested }, message: 'No eligible users' });
+  }
+
+  const description = `Admin bonus credit (${requested} tokens)`;
+  const txns = targets.map(u => ({
+    user: u._id,
+    type: 'recharge',
+    amount: 0,
+    tokens: requested,
+    description,
+    paymentStatus: 'paid',
+  }));
+
+  await WalletTransaction.insertMany(txns);
+  await User.updateMany(
+    { _id: { $in: targets.map(t => t._id) } },
+    { $inc: { walletBalance: requested } }
+  );
+
+  cfg.lastBulkCreditedAt = new Date();
+  cfg.lastBulkCreditedAmount = requested;
+  cfg.lastBulkCreditedCount = targets.length;
+  cfg.updatedBy = req.user.id;
+  await cfg.save();
+
+  res.json({
+    success: true,
+    data: { creditedCount: targets.length, amount: requested, config: cfg },
+    message: `Credited ${requested} tokens to ${targets.length} users`,
   });
 }));
 
