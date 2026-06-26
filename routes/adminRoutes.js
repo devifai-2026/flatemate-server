@@ -560,7 +560,7 @@ router.get('/listings/:type/:id', asyncHandler(async (req, res) => {
   res.json({ success: true, data: item });
 }));
 
-router.put('/listings/:type/:id/toggle-hide', asyncHandler(async (req, res) => {
+router.put('/listings/:type/:id/toggle-hide', fullAdminOnly, asyncHandler(async (req, res) => {
   let Model;
   if (req.params.type === 'room') Model = Room;
   else if (req.params.type === 'pg') Model = PG;
