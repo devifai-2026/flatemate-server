@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const jwt = require('jsonwebtoken');
 const { protect } = require('../middleware/auth');
-const { adminOnly } = require('../middleware/admin');
+const { adminOnly, fullAdminOnly } = require('../middleware/admin');
 const asyncHandler = require('../utils/asyncHandler');
 const AppError = require('../utils/AppError');
 const User = require('../models/User');
@@ -100,10 +100,10 @@ router.post('/register', asyncHandler(async (req, res) => {
 router.use(protect, adminOnly);
 
 // ═══════════════════════════════════════════
-// ANALYTICS
+// ANALYTICS  (full admin only)
 // ═══════════════════════════════════════════
 
-router.get('/analytics', asyncHandler(async (req, res) => {
+router.get('/analytics', fullAdminOnly, asyncHandler(async (req, res) => {
   const now = new Date();
   const { period = '1m' } = req.query;
 
@@ -239,6 +239,7 @@ router.get('/analytics', asyncHandler(async (req, res) => {
 // LISTING COUNTS & RECENT LISTINGS
 // ═══════════════════════════════════════════
 
+// Counts power the tab badges on the Listings page (visible to listers too).
 router.get('/listings/counts', asyncHandler(async (req, res) => {
   const [rooms, pgs, requirements] = await Promise.all([
     Room.countDocuments(),
@@ -248,7 +249,7 @@ router.get('/listings/counts', asyncHandler(async (req, res) => {
   res.json({ success: true, data: { rooms, pgs, requirements } });
 }));
 
-router.get('/listings/recent', asyncHandler(async (req, res) => {
+router.get('/listings/recent', fullAdminOnly, asyncHandler(async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 5, 20);
   const [rooms, pgs, requirements] = await Promise.all([
     Room.find().populate('postedBy', 'name phone profileImage').sort({ createdAt: -1 }).limit(limit).lean(),
@@ -359,10 +360,10 @@ router.put('/users/:id/unblock', asyncHandler(async (req, res) => {
 }));
 
 // ═══════════════════════════════════════════
-// TRANSACTIONS
+// TRANSACTIONS  (full admin only)
 // ═══════════════════════════════════════════
 
-router.get('/transactions', asyncHandler(async (req, res) => {
+router.get('/transactions', fullAdminOnly, asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, type, paymentStatus, from, to, search } = req.query;
   const filter = {};
 
@@ -412,7 +413,7 @@ router.get('/transactions', asyncHandler(async (req, res) => {
   });
 }));
 
-router.get('/transactions/stats', asyncHandler(async (req, res) => {
+router.get('/transactions/stats', fullAdminOnly, asyncHandler(async (req, res) => {
   const { from, to } = req.query;
   const dateFilter = {};
   if (from || to) {
@@ -574,10 +575,10 @@ router.put('/listings/:type/:id/toggle-hide', asyncHandler(async (req, res) => {
 }));
 
 // ═══════════════════════════════════════════
-// CHATS MONITOR
+// CHATS MONITOR  (full admin only)
 // ═══════════════════════════════════════════
 
-router.get('/chats', asyncHandler(async (req, res) => {
+router.get('/chats', fullAdminOnly, asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, search } = req.query;
   const filter = {};
   const skip = (Number(page) - 1) * Number(limit);
@@ -591,7 +592,7 @@ router.get('/chats', asyncHandler(async (req, res) => {
   res.json({ success: true, data: convos, pagination: { total, page: Number(page), pages: Math.ceil(total / Number(limit)) } });
 }));
 
-router.get('/chats/:conversationId/messages', asyncHandler(async (req, res) => {
+router.get('/chats/:conversationId/messages', fullAdminOnly, asyncHandler(async (req, res) => {
   const { page = 1, limit = 50 } = req.query;
   const skip = (Number(page) - 1) * Number(limit);
   const [messages, total] = await Promise.all([
@@ -604,8 +605,10 @@ router.get('/chats/:conversationId/messages', asyncHandler(async (req, res) => {
 }));
 
 // ═══════════════════════════════════════════
-// TICKETS
+// TICKETS  (full admin only)
 // ═══════════════════════════════════════════
+
+router.use('/tickets', fullAdminOnly);
 
 router.get('/tickets/badge-count', asyncHandler(async (req, res) => {
   const count = await Ticket.countDocuments({ status: { $in: ['open', 'in-progress'] } });
@@ -686,8 +689,10 @@ router.post('/tickets/:id/messages', asyncHandler(async (req, res) => {
 }));
 
 // ═══════════════════════════════════════════
-// GUEST ACTIVITY
+// GUEST ACTIVITY  (full admin only)
 // ═══════════════════════════════════════════
+
+router.use('/guests', fullAdminOnly);
 
 router.get('/guests', asyncHandler(async (req, res) => {
   const { page = 1, limit = 20, sort = '-lastSeenAt' } = req.query;
@@ -740,8 +745,10 @@ router.get('/guests/:id', asyncHandler(async (req, res) => {
 }));
 
 // ═══════════════════════════════════════════
-// API ACTIVITY
+// API ACTIVITY  (full admin only)
 // ═══════════════════════════════════════════
+
+router.use('/api-logs', fullAdminOnly);
 
 router.get('/api-logs/errors', asyncHandler(async (req, res) => {
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
@@ -852,10 +859,10 @@ router.get('/api-logs/stats', asyncHandler(async (req, res) => {
 }));
 
 // ═══════════════════════════════════════════
-// DB STORAGE
+// DB STORAGE  (full admin only)
 // ═══════════════════════════════════════════
 
-router.get('/db-stats', asyncHandler(async (req, res) => {
+router.get('/db-stats', fullAdminOnly, asyncHandler(async (req, res) => {
   const db = mongoose.connection.db;
   const dbStats = await db.command({ dbStats: 1 });
 
@@ -904,6 +911,9 @@ const APPROVAL_MODELS = {
   roommate: { Model: RoommateListing, ownerField: 'user' },
   requirement: { Model: Requirement, ownerField: 'createdBy' },
 };
+
+// All approval routes are full-admin only.
+router.use('/approvals', fullAdminOnly);
 
 // GET /admin/approvals/badge-count
 router.get('/approvals/badge-count', asyncHandler(async (req, res) => {
@@ -1026,6 +1036,8 @@ router.post('/approvals/migrate', asyncHandler(async (req, res) => {
 // ═══════════════════════════════════════════
 // BONUS GIFTING (signup bonus + bulk credit existing users)
 // ═══════════════════════════════════════════
+
+router.use('/bonus-config', fullAdminOnly);
 
 router.get('/bonus-config', asyncHandler(async (req, res) => {
   const cfg = await BonusConfig.getSingleton();

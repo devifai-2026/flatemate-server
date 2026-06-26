@@ -114,6 +114,14 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Admin panel role. Only meaningful when isAdmin is true.
+    //   'admin'  = full access (super admin)
+    //   'lister' = restricted to Add Listing / Listings / Users tabs
+    role: {
+      type: String,
+      enum: ['admin', 'lister'],
+      default: 'admin',
+    },
     isBlocked: {
       type: Boolean,
       default: false,
