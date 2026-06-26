@@ -1120,11 +1120,13 @@ router.post('/listings/:type', asyncHandler(async (req, res) => {
     throw new AppError(error.details.map((d) => d.message).join(', '), 400);
   }
 
-  const { phone: rawPhone, images, ...fields } = value;
+  const { phone: rawPhone, name, images, ...fields } = value;
   const phone = String(rawPhone).replace(/^\+91/, '').replace(/\D/g, '');
   if (!/^\d{10}$/.test(phone)) {
     throw new AppError('Please provide a valid 10-digit phone number', 400);
   }
+
+  const trimmedName = (name || '').trim();
 
   // Find-or-create the target user. New accounts are pre-verified so the user can
   // log in via OTP straight away (the OTP flow only sets phoneVerified on first
@@ -1132,8 +1134,16 @@ router.post('/listings/:type', asyncHandler(async (req, res) => {
   let user = await User.findOne({ phone });
   let userCreated = false;
   if (!user) {
-    user = await User.create({ phone, verified: true });
+    // A new seeded account needs a name so listings show a proper "Posted by".
+    if (!trimmedName) {
+      throw new AppError('Name is required when creating a listing for a new phone number', 400);
+    }
+    user = await User.create({ phone, name: trimmedName, verified: true });
     userCreated = true;
+  } else if (trimmedName && !user.name) {
+    // Existing account with no name yet — fill it, but never overwrite a real name.
+    user.name = trimmedName;
+    await user.save();
   }
 
   if (user.isBlocked) {
