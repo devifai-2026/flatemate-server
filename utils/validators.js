@@ -173,6 +173,91 @@ const requirementSchema = Joi.object({
   contactPhone: Joi.string().pattern(phonePattern),
 });
 
+// Admin creates a requirement on behalf of a user. Same shape as requirementSchema,
+// but `phone` (the target user) is required, images are optional, and lifestyleTags
+// has no minimum (admin seeding shouldn't be forced to fill every field).
+const adminRequirementSchema = Joi.object({
+  phone: Joi.string().pattern(phonePattern).required()
+    .messages({
+      'string.pattern.base': 'Please provide a valid phone number',
+      'any.required': 'Phone number is required',
+    }),
+  type: Joi.string().valid('flatmate').default('flatmate'),
+  title: Joi.string().max(200).required(),
+  description: Joi.string().max(2000).allow(''),
+  budget: Joi.object({
+    min: Joi.number().min(0).required(),
+    max: Joi.number().min(0).required(),
+  }).required(),
+  location: Joi.string().required(),
+  moveInDate: Joi.date().iso(),
+  gender: Joi.string().valid('male', 'female', 'non-binary'),
+  age: Joi.number().integer().min(18).max(120),
+  occupation: Joi.string().valid('student', 'working-professional', 'freelancer', 'business', 'other'),
+  religion: Joi.string().valid('hindu', 'muslim', 'christian', 'sikh', 'jain', 'buddhist', 'no-preference', 'other'),
+  foodPreference: Joi.string().valid('veg', 'non-veg', 'eggetarian', 'vegan', 'no-preference'),
+  languages: Joi.array().items(Joi.string()),
+  roomType: Joi.string().valid('single', 'shared', 'any'),
+  preferredRoommate: preferredRoommateJoi,
+  lifestyle: lifestyleJoi,
+  lifestyleTags: Joi.array().items(Joi.string()),
+  notes: Joi.string().max(1000).allow(''),
+  images: Joi.array().items(Joi.string().uri()).max(3),
+  phoneVisibility: Joi.string().valid('masked', 'reveal'),
+  contactPhone: Joi.string().pattern(phonePattern),
+});
+
+// Admin creates a room listing on behalf of a user. Mirrors roomSchema but
+// `phone` is required, images optional, and availableFrom optional (defaults to now).
+const adminRoomSchema = Joi.object({
+  phone: Joi.string().pattern(phonePattern).required()
+    .messages({
+      'string.pattern.base': 'Please provide a valid phone number',
+      'any.required': 'Phone number is required',
+    }),
+  title: Joi.string().max(200).required(),
+  description: Joi.string().max(2000).required(),
+  location: Joi.string().required(),
+  rent: Joi.number().min(0).required(),
+  deposit: Joi.number().min(0),
+  amenities: Joi.array().items(Joi.string()),
+  images: Joi.array().items(Joi.string().uri()).max(8),
+  availableFrom: Joi.date().iso(),
+  preferredTenant: Joi.string().valid('male', 'female', 'any', 'family', 'students', 'working-professionals'),
+  roomType: Joi.string().valid('1rk', '1bhk', '2bhk', '3bhk', '4bhk+', 'single-room', 'shared-room'),
+  furnishing: Joi.string().valid('fully-furnished', 'semi-furnished', 'unfurnished'),
+  bathrooms: Joi.number().integer().min(1),
+  floor: Joi.string().max(20),
+  totalArea: Joi.string().max(50),
+  parking: Joi.string().valid('bike', 'car', 'both', 'none'),
+  phoneVisibility: Joi.string().valid('masked', 'reveal'),
+  contactPhone: Joi.string().pattern(phonePattern),
+});
+
+// Admin creates a PG listing on behalf of a user. Mirrors the PG model.
+const adminPgSchema = Joi.object({
+  phone: Joi.string().pattern(phonePattern).required()
+    .messages({
+      'string.pattern.base': 'Please provide a valid phone number',
+      'any.required': 'Phone number is required',
+    }),
+  title: Joi.string().max(200).required(),
+  description: Joi.string().max(2000).allow(''),
+  location: Joi.string().required(),
+  city: Joi.string().required(),
+  rent: Joi.number().min(0).required(),
+  deposit: Joi.number().min(0),
+  sharing: Joi.string().valid('single', 'double', 'triple', 'any'),
+  gender: Joi.string().valid('male', 'female', 'unisex'),
+  amenities: Joi.array().items(Joi.string()),
+  meals: Joi.boolean(),
+  mealType: Joi.string().valid('veg', 'non-veg', 'both'),
+  images: Joi.array().items(Joi.string().uri()).max(8),
+  availableFrom: Joi.date().iso(),
+  phoneVisibility: Joi.string().valid('masked', 'reveal'),
+  contactPhone: Joi.string().pattern(phonePattern),
+});
+
 const requirementUpdateSchema = Joi.object({
   type: Joi.string().valid('flatmate'),
   title: Joi.string().max(200),
@@ -248,6 +333,9 @@ module.exports = {
   roomUpdateSchema,
   roommateListingSchema,
   requirementSchema,
+  adminRequirementSchema,
+  adminRoomSchema,
+  adminPgSchema,
   requirementUpdateSchema,
   teamSchema,
   createEnquiryOrderSchema,

@@ -21,9 +21,30 @@ const Wishlist = require('../models/Wishlist');
 const GuestActivity = require('../models/GuestActivity');
 const ApiLog = require('../models/ApiLog');
 const BonusConfig = require('../models/BonusConfig');
+const {
+  adminRequirementSchema,
+  adminRoomSchema,
+  adminPgSchema,
+} = require('../utils/validators');
 const mongoose = require('mongoose');
 
 const router = Router();
+
+// Fallback images used when an admin creates a listing without uploading photos.
+// Real users add their own photos when they onboard later.
+const FALLBACK_LISTING_IMAGES = [
+  'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=1200&q=80',
+];
+
+// Config for admin-created listings, keyed by URL type. Mirrors the user-facing
+// flatmate-web post flow, which only has room / pg / requirement (the legacy
+// roommate listing is folded into requirement). Each entry knows its model, the
+// field that stores the owner, and the validation schema.
+const ADMIN_LISTING_TYPES = {
+  room: { Model: Room, ownerField: 'postedBy', schema: adminRoomSchema, hasImages: true },
+  pg: { Model: PG, ownerField: 'postedBy', schema: adminPgSchema, hasImages: true },
+  requirement: { Model: Requirement, ownerField: 'createdBy', schema: adminRequirementSchema, hasImages: true },
+};
 
 // ═══════════════════════════════════════════
 // ADMIN AUTH (email + password, no OTP)
@@ -257,6 +278,22 @@ router.get('/users', asyncHandler(async (req, res) => {
     User.countDocuments(filter),
   ]);
   res.json({ success: true, data: users, pagination: { total, page: Number(page), pages: Math.ceil(total / Number(limit)) } });
+}));
+
+// GET /admin/users/lookup?phone=... — check if a user already exists for a phone
+// number. Used by the "add listing on behalf of user" form so the admin can see
+// whether they're attaching to an existing account or creating a new one.
+// NOTE: must be registered before '/users/:id' so 'lookup' isn't treated as an id.
+router.get('/users/lookup', asyncHandler(async (req, res) => {
+  const raw = String(req.query.phone || '');
+  const phone = raw.replace(/^\+91/, '').replace(/\D/g, '');
+  if (!/^\d{10}$/.test(phone)) {
+    throw new AppError('Please provide a valid 10-digit phone number', 400);
+  }
+  const user = await User.findOne({ phone })
+    .select('name firstName surname phone profileImage verified onboardingComplete createdAt')
+    .lean();
+  res.json({ success: true, data: { exists: !!user, user: user || null, phone } });
 }));
 
 router.get('/users/:id', asyncHandler(async (req, res) => {
@@ -1056,6 +1093,96 @@ router.post('/bonus-config/credit-existing', asyncHandler(async (req, res) => {
     success: true,
     data: { creditedCount: targets.length, amount: requested, config: cfg },
     message: `Credited ${requested} tokens to ${targets.length} users`,
+  });
+}));
+
+// ═══════════════════════════════════════════
+// ADMIN-CREATED LISTINGS (on behalf of a user)
+// ═══════════════════════════════════════════
+
+// POST /admin/listings/:type — admin creates a listing on behalf of a user
+// identified by phone number. `:type` is one of room | pg | requirement.
+//  • If no user exists for the phone, a verified account is created so they can
+//    later log in via OTP and see/manage the listing.
+//  • The listing is auto-approved (admin is trusted) so it's live immediately.
+//  • Photos are optional — fallback images are used when none are provided
+//    (for listing types that support images).
+router.post('/listings/:type', asyncHandler(async (req, res) => {
+  const { type } = req.params;
+  const config = ADMIN_LISTING_TYPES[type];
+  if (!config) {
+    throw new AppError('Invalid listing type. Use room, pg, or requirement.', 400);
+  }
+
+  // Validate against the type's schema (strips unknown keys, like middleware/validate).
+  const { error, value } = config.schema.validate(req.body, { abortEarly: false, stripUnknown: true });
+  if (error) {
+    throw new AppError(error.details.map((d) => d.message).join(', '), 400);
+  }
+
+  const { phone: rawPhone, images, ...fields } = value;
+  const phone = String(rawPhone).replace(/^\+91/, '').replace(/\D/g, '');
+  if (!/^\d{10}$/.test(phone)) {
+    throw new AppError('Please provide a valid 10-digit phone number', 400);
+  }
+
+  // Find-or-create the target user. New accounts are pre-verified so the user can
+  // log in via OTP straight away (the OTP flow only sets phoneVerified on first
+  // verification — that still works because the phone already exists here).
+  let user = await User.findOne({ phone });
+  let userCreated = false;
+  if (!user) {
+    user = await User.create({ phone, verified: true });
+    userCreated = true;
+  }
+
+  if (user.isBlocked) {
+    throw new AppError('This user is blocked. Unblock them before creating listings.', 400);
+  }
+
+  // PG's model requires a description, but the user-facing form (and ours) keeps
+  // it optional — fall back to the title so admin seeding isn't blocked.
+  if (type === 'pg' && !fields.description?.trim()) {
+    fields.description = fields.title;
+  }
+
+  const doc = {
+    ...fields,
+    [config.ownerField]: user._id,
+    status: 'approved', // admin-created listings go live immediately
+  };
+  if (config.hasImages) {
+    doc.images = images && images.length ? images : FALLBACK_LISTING_IMAGES;
+  }
+
+  const listing = await config.Model.create(doc);
+
+  // Let the user know (if they happen to be connected) that a listing was added.
+  const io = req.app.get('io');
+  if (io) {
+    io.to(`user:${user._id}`).emit('listing-approved', {
+      listingId: listing._id,
+      type,
+      title: listing.title,
+    });
+  }
+
+  const typeLabel = type === 'pg' ? 'PG' : type.charAt(0).toUpperCase() + type.slice(1);
+  res.status(201).json({
+    success: true,
+    message: userCreated
+      ? `${typeLabel} listing created and a new account was set up for this number`
+      : `${typeLabel} listing created for the existing user`,
+    data: {
+      listing,
+      type,
+      user: {
+        _id: user._id,
+        phone: user.phone,
+        name: user.name || null,
+      },
+      userCreated,
+    },
   });
 }));
 
