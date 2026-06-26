@@ -1,0 +1,41 @@
+name: Deploy backend
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy over SSH
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" bash -se <<'EOF'
+          set -euo pipefail
+          cd ~/flatmate-server
+
+          # Preserve server-only files: .env.production is NOT in the repo path we pull,
+          # but stash any local edits so the rebase is clean, then restore them.
+          git stash push -m "ci-deploy" -- .env.production 2>/dev/null || true
+          git fetch origin main
+          git pull --rebase origin main
+          git stash pop 2>/dev/null || true
+
+          npm install --omit=dev
+          pm2 restart flatmate-server-prod --update-env
+
+          sleep 3
+          curl -fsS -o /dev/null http://localhost:8000/health && echo "✅ backend healthy" || (echo "❌ health check failed" && exit 1)
+          EOF
